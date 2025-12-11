@@ -2,8 +2,10 @@
 .vscode/
 __pycache__/
 
-scratch/
+*scratch/
 scratch*.*
 
 user_specs.yaml
-listen_history.db
+data/listen_history.db
+data/exports
+cheat_sheet.md
