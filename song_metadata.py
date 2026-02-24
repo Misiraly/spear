@@ -157,6 +157,48 @@ def update_song_path(uid, new_path, db_path=DB_PATH):
         conn.commit()
 
 
+def update_song_title(uid, new_title, db_path=DB_PATH):
+    """Update song title (database only, does not rename file)
+    
+    Args:
+        uid: Song UID
+        new_title: New title for the song
+        db_path: Path to database
+    """
+    with _get_connection(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            UPDATE songs 
+            SET title = ?, last_modified = ?
+            WHERE uid = ?
+        """,
+            (new_title, datetime.now().isoformat(), uid),
+        )
+        conn.commit()
+
+
+def update_song_duration(uid, new_duration, db_path=DB_PATH):
+    """Update song duration
+    
+    Args:
+        uid: Song UID
+        new_duration: New duration in seconds
+        db_path: Path to database
+    """
+    with _get_connection(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            UPDATE songs 
+            SET duration = ?, last_modified = ?
+            WHERE uid = ?
+        """,
+            (new_duration, datetime.now().isoformat(), uid),
+        )
+        conn.commit()
+
+
 def delete_song(uid, db_path=DB_PATH):
     """Delete song by UID (does not delete listen history)"""
     with _get_connection(db_path) as conn:
@@ -197,3 +239,22 @@ def get_songs_with_listen_count(limit=None, db_path=DB_PATH):
             query += f" LIMIT {limit}"
         cursor.execute(query)
         return [_row_to_song_dict_with_count(row) for row in cursor.fetchall()]
+
+
+def get_random_song(db_path=DB_PATH):
+    """
+    Get a random song_uid from the songs table.
+    
+    Returns song_uid or None if no songs exist.
+    """
+    with _get_connection(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT uid FROM songs 
+            ORDER BY RANDOM() 
+            LIMIT 1
+        """
+        )
+        row = cursor.fetchone()
+        return row[0] if row else None

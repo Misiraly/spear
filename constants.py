@@ -1,2 +1,5 @@
 USER_SPECS_DATA = "user_specs.yaml"
 DB_PATH = "data/listen_history.db"
+SCREEN_WIDTH = 80
+DEFAULT_RANDOM_OFFER_COUNT = 5
+DEFAULT_SEARCH_RESULTS = 10

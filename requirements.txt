@@ -3,4 +3,4 @@ regex
 python-vlc
 pyyaml
 polars
-urwid
+rapidfuzz

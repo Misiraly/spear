@@ -5,6 +5,7 @@ This module provides common database connection management, UID generation,
 and helper functions used across playlists, listen_history, and song_metadata modules.
 """
 
+import hashlib
 import re
 import secrets
 import sqlite3
@@ -46,6 +47,37 @@ def generate_uid():
     """
     chars = string.ascii_letters + string.digits
     return "".join(secrets.choice(chars) for _ in range(16))
+
+
+def generate_uid_from_url(url):
+    """Generate deterministic 16-character alphanumeric UID from URL
+
+    Uses SHA-256 hash of the URL, encoded to base62 (alphanumeric),
+    truncated to 16 characters. Same URL always produces same UID.
+
+    Args:
+        url: YouTube or other URL to generate UID from
+
+    Returns:
+        str: Deterministic 16-character UID
+    """
+    # Hash the URL
+    hash_bytes = hashlib.sha256(url.encode("utf-8")).digest()
+    
+    # Convert to base62 (alphanumeric only)
+    chars = string.ascii_letters + string.digits
+    hash_int = int.from_bytes(hash_bytes, byteorder="big")
+    
+    result = []
+    while hash_int > 0 and len(result) < 16:
+        hash_int, remainder = divmod(hash_int, 62)
+        result.append(chars[remainder])
+    
+    # Pad if needed
+    while len(result) < 16:
+        result.append(chars[0])
+    
+    return "".join(result[:16])
 
 
 def validate_uid(uid, uid_type="UID"):
@@ -140,6 +172,15 @@ def row_to_history_dict(row):
         "listen_date": row[2],
         "listen_time": row[3],
         "source": row[4],
+    }
+
+
+def row_to_timeline_dict(row):
+    """Convert playback timeline row to dict with fields: position, song_uid, added_at"""
+    return {
+        "position": row[0],
+        "song_uid": row[1],
+        "added_at": row[2],
     }
 
 

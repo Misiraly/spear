@@ -660,41 +660,6 @@ def move_song(playlist_uid, from_position, to_position, db_path=DB_PATH):
         return True
 
 
-def shuffle_playlist(playlist_uid, db_path=DB_PATH):
-    """Randomize the order of songs in a playlist"""
-    _validate_uid(playlist_uid, "playlist_uid")
-
-    with _get_connection(db_path) as conn:
-        cursor = conn.cursor()
-
-        # Get all item IDs
-        cursor.execute(
-            """
-            SELECT id FROM playlist_items WHERE playlist_uid = ?
-        """,
-            (playlist_uid,),
-        )
-        item_ids = [row[0] for row in cursor.fetchall()]
-
-        # Shuffle the list
-        random.shuffle(item_ids)
-
-        # Assign new positions using executemany
-        updates = [
-            (new_position, item_id)
-            for new_position, item_id in enumerate(item_ids, start=1)
-        ]
-        cursor.executemany(
-            """
-            UPDATE playlist_items SET position = ? WHERE id = ?
-        """,
-            updates,
-        )
-
-        _update_modified_time(playlist_uid, conn, db_path)
-        conn.commit()
-
-
 # ============================================================================
 # QUERY FUNCTIONS
 # ============================================================================
