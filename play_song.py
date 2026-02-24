@@ -229,13 +229,13 @@ class MusicPlayer:
         # Calculate bar width based on fixed total width
         # Total: icon(5) + pos_time(4) + bar + dur_time(4) = 80
         bar_width = cv.SCREEN_WIDTH - 5 - len(pos_str) - len(dur_str)
-        filled = int(bar_width * progress)
+        filled = min(int(bar_width * progress), bar_width - 1)  # ensure v + dashes always fit
         
         # Build bar with cursor: ===v---
         bar = "=" * filled + "v" + "-" * (bar_width - filled - 1)
         
-        # Print with carriage return (overwrite same line)
-        sys.stdout.write(f"\r{icon}{pos_str}{bar}{dur_str}")
+        # Print with carriage return (overwrite same line); \033[K clears to end of line
+        sys.stdout.write(f"\r{icon}{pos_str}{bar}{dur_str}\033[K")
         sys.stdout.flush()
         
     def _format_time(self, seconds: float) -> str:
@@ -349,7 +349,10 @@ class MusicPlayer:
             milliseconds: Amount to seek (positive = forward, negative = backward)
         """
         current_time = self.player.get_time()
+        duration = self.player.get_length()
         new_time = max(0, current_time + milliseconds)
+        if duration > 0:
+            new_time = min(new_time, duration - 1000)  # 1 second buffer before end
         self.player.set_time(new_time)
     
     def _jump_to_percent(self, percent: int):

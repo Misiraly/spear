@@ -9,6 +9,7 @@ import os
 from datetime import datetime
 
 import constants as cv
+import reader
 from db_utils import get_connection as _get_connection
 from db_utils import row_to_song_dict as _row_to_song_dict
 from db_utils import \
@@ -17,6 +18,23 @@ from db_utils import validate_uid as _validate_uid
 
 # Constants
 DB_PATH = os.path.join(os.path.dirname(__file__), cv.DB_PATH)
+
+
+def resolve_path(filename):
+    """Resolve a song filename to its full absolute path.
+
+    Joins the music library directory from user_specs.yaml with the
+    stored filename (e.g. 'Song.ogg' -> 'C:/.../music_library/Song.ogg').
+
+    Args:
+        filename: The filename stored in the database (basename only).
+
+    Returns:
+        str: Full absolute path, or the original value if filename is falsy.
+    """
+    if not filename:
+        return filename
+    return os.path.join(reader.get_music_library_path(), filename)
 
 
 def init_database(db_path=DB_PATH):
@@ -56,16 +74,47 @@ def init_database(db_path=DB_PATH):
 
         conn.commit()
 
+    # Migrate any legacy full paths to bare filenames
+    _migrate_paths_to_filenames(db_path)
+
     return db_path
+
+
+def _migrate_paths_to_filenames(db_path):
+    """One-time migration: strip absolute directory prefixes from stored paths.
+
+    Any path that contains a directory separator is reduced to its basename
+    (e.g. 'C:/music/Song.ogg' -> 'Song.ogg').  Rows that are already bare
+    filenames are left untouched.
+    """
+    with _get_connection(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT uid, path FROM songs")
+        rows = cursor.fetchall()
+
+        updates = []
+        for uid, path in rows:
+            if path and (os.sep in path or '/' in path):
+                updates.append((os.path.basename(path), uid))
+
+        if updates:
+            cursor.executemany(
+                "UPDATE songs SET path = ? WHERE uid = ?", updates
+            )
+            conn.commit()
 
 
 def add_song(uid, title, path, url=None, duration=None, add_date=None, db_path=DB_PATH):
     """Add a new song to the database or update if it exists
 
+    The *path* stored is always the bare filename (basename). Callers may
+    pass either a full absolute path or just a filename — the directory
+    component is stripped automatically.
+
     Args:
         uid: 16-character unique identifier
         title: Song title
-        path: File path to the song
+        path: File path (or filename) of the song
         url: YouTube URL (optional)
         duration: Duration in seconds (optional)
         add_date: Date added (defaults to now)
@@ -82,6 +131,9 @@ def add_song(uid, title, path, url=None, duration=None, add_date=None, db_path=D
     if add_date is None:
         add_date = datetime.now().date().isoformat()
 
+    # Always store only the filename
+    filename = os.path.basename(path) if path else path
+
     with _get_connection(db_path) as conn:
         cursor = conn.cursor()
         cursor.execute(
@@ -90,7 +142,7 @@ def add_song(uid, title, path, url=None, duration=None, add_date=None, db_path=D
             (uid, title, url, duration, add_date, path, last_modified)
             VALUES (?, ?, ?, ?, ?, ?, ?)
         """,
-            (uid, title, url, duration, add_date, path, datetime.now().isoformat()),
+            (uid, title, url, duration, add_date, filename, datetime.now().isoformat()),
         )
         conn.commit()
 

@@ -248,12 +248,14 @@ def redownload_song(uid: str) -> bool:
     
     # Delete old file if it exists
     old_path = existing_song.get("path")
-    if old_path and os.path.exists(old_path):
-        try:
-            os.remove(old_path)
-            print(f"✓ Deleted old file")
-        except OSError as e:
-            print(f"⚠ Could not delete old file: {e}")
+    if old_path:
+        full_old_path = song_metadata.resolve_path(old_path)
+        if full_old_path and os.path.exists(full_old_path):
+            try:
+                os.remove(full_old_path)
+                print(f"✓ Deleted old file")
+            except OSError as e:
+                print(f"⚠ Could not delete old file: {e}")
     
     # Download fresh
     download_info = youtube_downloader.download_video(url)

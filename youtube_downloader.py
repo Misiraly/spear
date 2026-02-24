@@ -12,6 +12,7 @@ from typing import Optional, Dict, List
 
 import youtube_utils
 import reader
+import song_metadata
 
 
 def _get_file_duration(file_path: str) -> Optional[int]:
@@ -182,7 +183,9 @@ def check_duplicate_before_download(url: str) -> Optional[str]:
     
     if existing_song:
         # URL is tracked in database
-        if existing_song.get("path") and youtube_utils.path_exists(existing_song["path"]):
+        stored_path = existing_song.get("path")
+        full_path = song_metadata.resolve_path(stored_path) if stored_path else None
+        if full_path and os.path.exists(full_path):
             # Path exists on disk
             if existing_song.get("title") and existing_song.get("duration"):
                 # All data present
@@ -200,8 +203,8 @@ def check_duplicate_before_download(url: str) -> Optional[str]:
         safe_title = youtube_utils.sanitize_filename(metadata["title"])
         library_path = reader.get_music_library_path()
         expected_path = os.path.join(library_path, f"{safe_title}.ogg")
-        
-        if youtube_utils.path_exists(expected_path):
+
+        if os.path.exists(expected_path):
             return "skip_path"
     
     return "download"

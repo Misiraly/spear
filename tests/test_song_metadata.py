@@ -66,7 +66,7 @@ class TestAddSong(TestSongMetadata):
 
         song = song_metadata.get_song(uid, self.db_path)
         self.assertEqual(song["title"], "Test Song")
-        self.assertEqual(song["path"], "/path/to/song.mp3")
+        self.assertEqual(song["path"], "song.mp3")  # Only basename is stored
         self.assertIsNone(song["url"])
         self.assertIsNone(song["duration"])
 
@@ -113,7 +113,7 @@ class TestAddSong(TestSongMetadata):
 
         song = song_metadata.get_song(uid, self.db_path)
         self.assertEqual(song["title"], "Updated Title")
-        self.assertEqual(song["path"], "/updated/path")
+        self.assertEqual(song["path"], "path")  # Only basename stored
 
     def test_add_song_invalid_uid(self):
         """Test that invalid UID format raises ValueError"""
@@ -245,10 +245,10 @@ class TestUpdateSong(TestSongMetadata):
         uid = "songPATHABCD5678"
         song_metadata.add_song(uid, "Test", "/old/path", db_path=self.db_path)
 
-        song_metadata.update_song_path(uid, "/new/path", self.db_path)
+        song_metadata.update_song_path(uid, "new_file.ogg", self.db_path)
 
         song = song_metadata.get_song(uid, self.db_path)
-        self.assertEqual(song["path"], "/new/path")
+        self.assertEqual(song["path"], "new_file.ogg")
         self.assertIsNotNone(song["last_modified"])
 
 

@@ -58,6 +58,8 @@ def display_menu():
         # Handle replay last played
         if user_input.lower() == 'r':
             _handle_replay()
+            songs = song_metadata.get_songs_alphabetically()
+            _print_library(songs)
             continue
 
         # Check for delete command (del <number>)
@@ -68,6 +70,7 @@ def display_menu():
             except ValueError:
                 print("Invalid delete command. Usage: del <number>")
             songs = song_metadata.get_songs_alphabetically()
+            _print_library(songs)
             continue
 
         # Check for rename command (ren <number>)
@@ -78,6 +81,7 @@ def display_menu():
             except ValueError:
                 print("Invalid rename command. Usage: ren <number>")
             songs = song_metadata.get_songs_alphabetically()
+            _print_library(songs)
             continue
 
         # Check for re-download command (re <number>)
@@ -88,11 +92,14 @@ def display_menu():
             except ValueError:
                 print("Invalid re-download command. Usage: re <number>")
             songs = song_metadata.get_songs_alphabetically()
+            _print_library(songs)
             continue
 
         # Check for playlist menu command
         if user_input.lower() == 'p':
             _playlist_menu()
+            songs = song_metadata.get_songs_alphabetically()
+            _print_library(songs)
             continue
 
         # Check for quick-add to playlist (+ <song_num> <playlist_name>)
@@ -104,21 +111,28 @@ def display_menu():
         if user_input.lower().startswith('s '):
             url = user_input[2:].strip()
             _handle_stream(url)
+            _print_library(songs)
             continue
 
         # Shuffle and play all songs in the library
         if user_input.lower() in ['shuffle', 'sh']:
             _handle_shuffle_all(songs)
+            songs = song_metadata.get_songs_alphabetically()
+            _print_library(songs)
             continue
 
         # Suggest N random songs for selection
         if user_input.lower() == 'rand' or user_input.lower().startswith('rand '):
             _handle_random_offer(user_input, songs)
+            songs = song_metadata.get_songs_alphabetically()
+            _print_library(songs)
             continue
 
         # Loop a single song on repeat
         if user_input.lower().startswith('loop '):
             _handle_loop(user_input, songs)
+            songs = song_metadata.get_songs_alphabetically()
+            _print_library(songs)
             continue
 
         # Timeline ±10 view
@@ -148,17 +162,21 @@ def display_menu():
             # Download video and play
             _handle_video_download(user_input)
             songs = song_metadata.get_songs_alphabetically()
+            _print_library(songs)
 
         elif url_type == "playlist":
             # Confirm and download playlist
             _handle_playlist_download(user_input)
             songs = song_metadata.get_songs_alphabetically()
+            _print_library(songs)
 
         else:
             # Check for ad-hoc queue: 2+ numbers separated by commas/spaces
             tokens = user_input.replace(',', ' ').split()
             if len(tokens) >= 2 and all(t.isdigit() for t in tokens):
                 _handle_adhoc_queue(tokens, songs)
+                songs = song_metadata.get_songs_alphabetically()
+                _print_library(songs)
             else:
                 # Parse optional /N result-count suffix  (e.g. "dark side /20")
                 limit, query = _parse_search_limit(user_input)
@@ -166,6 +184,8 @@ def display_menu():
                     # Plain number → play that song
                     choice = int(query)
                     _handle_song_selection(str(choice), songs)
+                    songs = song_metadata.get_songs_alphabetically()
+                    _print_library(songs)
                 except ValueError:
                     # Anything else → fuzzy search
                     _handle_search(query, songs, limit)
@@ -198,20 +218,21 @@ def _print_library(songs):
         # Left column
         left_song = songs[left_idx]
         left_num = left_idx + 1
-        left_title = _truncate_title(left_song["title"], col_width - 15)  # Leave room for number and duration
+        title_w = col_width - 11  # 4 (num) + 1 (sp) + title + 1 (sp) + 5 (dur) = col_width
+        left_title = _truncate_title(left_song["title"], title_w)
         left_duration = _format_duration(left_song.get("duration", 0))
-        left_text = f"{left_num}. {left_title} [{left_duration}]"
+        left_text = f"{left_num:<4} {left_title:<{title_w}} {left_duration:>5}"
         
         # Right column (if exists)
         if right_idx < len(songs):
             right_song = songs[right_idx]
             right_num = right_idx + 1
-            right_title = _truncate_title(right_song["title"], col_width - 15)
+            right_title = _truncate_title(right_song["title"], title_w)
             right_duration = _format_duration(right_song.get("duration", 0))
-            right_text = f"{right_num}. {right_title} [{right_duration}]"
+            right_text = f"{right_num:<4} {right_title:<{title_w}} {right_duration:>5}"
             
             # Print both columns
-            print(f"{left_text:<{col_width}}{right_text}")
+            print(f"{left_text}  {right_text}")
         else:
             # Only left column
             print(left_text)
@@ -351,6 +372,8 @@ def _play_song(song, _from_timeline=False):
         print(f"\nError: No file path for song '{title}'")
         return False
 
+    # Resolve filename to full path via library directory
+    full_path = song_metadata.resolve_path(path)
     navigated = False
 
     # While loop handles chained G/H navigation without recursion depth risk
@@ -363,7 +386,7 @@ def _play_song(song, _from_timeline=False):
         if uid and not _from_timeline:
             playback_timeline.append_song(uid)
 
-        play_song.play_song(path, song_uid=uid, title=title)
+        play_song.play_song(full_path, song_uid=uid, title=title)
 
         # Check whether the user pressed G or H to navigate to a different song
         pending_uid = play_song.get_pending_song()
@@ -377,7 +400,7 @@ def _play_song(song, _from_timeline=False):
         # G/H navigation — update for next iteration
         navigated = True
         _from_timeline = True  # All subsequent songs come from the timeline
-        path = pending["path"]
+        full_path = song_metadata.resolve_path(pending["path"])
         uid = pending.get("uid")
         title = pending.get("title", "Unknown")
 
@@ -531,9 +554,10 @@ def _handle_delete(num, songs):
         song_metadata.delete_song(uid)
         
         # Delete file from disk
-        if path and os.path.exists(path):
+        full_path = song_metadata.resolve_path(path)
+        if full_path and os.path.exists(full_path):
             try:
-                os.remove(path)
+                os.remove(full_path)
                 print(f"✓ Deleted from library and disk")
             except OSError as e:
                 print(f"✓ Deleted from library (file deletion failed: {e})")
@@ -639,12 +663,12 @@ def _display_search_results(query: str, results: list, alpha_songs: list) -> Non
         print()
         return
 
-    for song in results:
+    for song in reversed(results):
         uid = song["uid"]
         idx = alpha_index.get(uid, "?")
         title = _truncate_title(song["title"], width - 16)
         duration = _format_duration(song.get("duration", 0))
-        print(f"  #{idx:<4}  {title:<{width - 16}} [{duration}]")
+        print(f"  {idx:<4}  {title:<{width - 16}} {duration:>5}")
 
     print()
 
@@ -677,7 +701,7 @@ def _display_timeline():
         if song:
             title = _truncate_title(song["title"], width - 20)
             duration = _format_duration(song.get("duration", 0))
-            meta = f"{title} [{duration}]"
+            meta = f"{title} {duration:>5}"
         else:
             meta = "[deleted]"
 
@@ -720,13 +744,13 @@ def _display_by_date(songs, reverse=False):
     print(f"SONGS BY DATE ADDED  ({direction})".center(width))
     print("=" * width)
 
-    for song in dated:
+    for song in reversed(dated):
         uid = song["uid"]
         idx = alpha_index.get(uid, "?")
         title = _truncate_title(song["title"], width - 28)
         duration = _format_duration(song.get("duration", 0))
         add_date = song.get("add_date", "")[:10]  # YYYY-MM-DD
-        print(f"  #{idx:<4}  {title:<{width - 28}} [{duration}]  {add_date}")
+        print(f"  {idx:<4}  {title:<{width - 28}} {duration:>5}  {add_date}")
 
     print()
 
@@ -789,7 +813,7 @@ def _display_by_play_count(songs, user_input):
     print(header.center(width))
     print("=" * width)
 
-    for entry in ranked:
+    for entry in reversed(list(ranked)):
         uid = entry["uid"]
         idx = alpha_index.get(uid)
         if idx is None:
@@ -797,7 +821,7 @@ def _display_by_play_count(songs, user_input):
         title = _truncate_title(entry["title"], width - 22)
         count = entry["listen_count"]
         plays = "play" if count == 1 else "plays"
-        print(f"  #{idx:<4}  {title:<{width - 22}}  {count} {plays}")
+        print(f"  {idx:<4}  {title:<{width - 22}}  {count} {plays}")
 
     print()
 
@@ -870,7 +894,7 @@ def _handle_random_offer(user_input, songs):
     for i, s in enumerate(offered, 1):
         title = _truncate_title(s["title"], width - 15)
         duration = _format_duration(s.get("duration", 0))
-        print(f"  {i}. {title} [{duration}]")
+        print(f"  {i:<3} {title:<{width - 15}} {duration:>5}")
     print()
 
     choice_str = input("Pick a number to play, or Enter to go back: ").strip()
@@ -916,6 +940,9 @@ def _handle_loop(user_input, songs):
         print(f"\nError: No file path for song '{title}'")
         return
 
+    # Resolve filename to full path via library directory
+    full_path = song_metadata.resolve_path(path)
+
     global _last_played_uid
     _last_played_uid = uid
 
@@ -923,7 +950,7 @@ def _handle_loop(user_input, songs):
         playback_timeline.append_song(uid)
 
     print(f"\n[Loop] {title}  —  Q: skip next / X: stop")
-    play_song.play_song(path, song_uid=uid, title=title, loop_mode=True)
+    play_song.play_song(full_path, song_uid=uid, title=title, loop_mode=True)
 
     # If G/H was pressed to escape loop mode, follow through to that song
     pending_uid = play_song.get_pending_song()
@@ -1030,7 +1057,7 @@ def _display_playlists(all_playlists):
         stats = playlists.get_playlist_stats(pl["uid"])
         count = stats["song_count"] if stats else 0
         empty_tag = " (empty)" if count == 0 else ""
-        left_text = f"{left_idx + 1}. {_truncate_title(pl['name'], col_width - 18)} ({count} songs){empty_tag}"
+        left_text = f"{left_idx + 1}  {_truncate_title(pl['name'], col_width - 18)} ({count} songs){empty_tag}"
         
         # Right column
         if right_idx < len(all_playlists):
@@ -1038,7 +1065,7 @@ def _display_playlists(all_playlists):
             stats_r = playlists.get_playlist_stats(pl_r["uid"])
             count_r = stats_r["song_count"] if stats_r else 0
             empty_tag_r = " (empty)" if count_r == 0 else ""
-            right_text = f"{right_idx + 1}. {_truncate_title(pl_r['name'], col_width - 18)} ({count_r} songs){empty_tag_r}"
+            right_text = f"{right_idx + 1}  {_truncate_title(pl_r['name'], col_width - 18)} ({count_r} songs){empty_tag_r}"
             print(f"{left_text:<{col_width}}{right_text}")
         else:
             print(left_text)
@@ -1152,7 +1179,7 @@ def _display_playlist_songs(playlist, songs):
         pos = song["position"]
         title = _truncate_title(song.get("title") or "Unknown", width - 15)
         duration = _format_duration(song.get("duration") or 0)
-        print(f"  {pos}. {title} [{duration}]")
+        print(f"  {pos:<4} {title:<{width - 15}} {duration:>5}")
     
     # Stats
     stats = playlists.get_playlist_stats(playlist["uid"])
