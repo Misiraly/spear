@@ -1,0 +1,4 @@
+# Copy this file to user_specs.yaml and fill in your values.
+# user_specs.yaml is gitignored — your local settings stay private.
+
+library: "/path/to/your/music/library"
