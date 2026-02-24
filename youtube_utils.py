@@ -5,15 +5,13 @@ This module provides URL validation, metadata extraction using yt-dlp,
 UID generation from URLs, duplicate checking, and filename sanitization.
 """
 
+import json
 import os
 import re
 import subprocess
-import json
-from typing import Optional, Dict, List
+from typing import Dict, Optional
 
-from db_utils import generate_uid_from_url
 import song_metadata
-
 
 # YouTube URL patterns
 VIDEO_URL_PATTERN = re.compile(
@@ -26,10 +24,10 @@ PLAYLIST_URL_PATTERN = re.compile(
 
 def is_video_url(url: str) -> bool:
     """Check if URL is a YouTube video URL
-    
+
     Args:
         url: URL to check
-        
+
     Returns:
         bool: True if valid YouTube video URL
     """
@@ -38,10 +36,10 @@ def is_video_url(url: str) -> bool:
 
 def is_playlist_url(url: str) -> bool:
     """Check if URL is a YouTube playlist URL
-    
+
     Args:
         url: URL to check
-        
+
     Returns:
         bool: True if valid YouTube playlist URL
     """
@@ -50,15 +48,15 @@ def is_playlist_url(url: str) -> bool:
 
 def detect_url_type(user_input: str) -> Optional[str]:
     """Detect if user input is a YouTube URL and what type
-    
+
     Args:
         user_input: User input string
-        
+
     Returns:
         str: "video" if video URL, "playlist" if playlist URL, None if not a URL
     """
     user_input = user_input.strip()
-    
+
     if is_playlist_url(user_input):
         return "playlist"
     elif is_video_url(user_input):
@@ -69,10 +67,10 @@ def detect_url_type(user_input: str) -> Optional[str]:
 
 def extract_video_id(url: str) -> Optional[str]:
     """Extract video ID from YouTube URL
-    
+
     Args:
         url: YouTube video URL
-        
+
     Returns:
         str: Video ID or None if not found
     """
@@ -82,10 +80,10 @@ def extract_video_id(url: str) -> Optional[str]:
 
 def extract_playlist_id(url: str) -> Optional[str]:
     """Extract playlist ID from YouTube URL
-    
+
     Args:
         url: YouTube playlist URL
-        
+
     Returns:
         str: Playlist ID or None if not found
     """
@@ -95,12 +93,12 @@ def extract_playlist_id(url: str) -> Optional[str]:
 
 def sanitize_filename(title: str) -> str:
     """Sanitize filename by removing/replacing illegal characters
-    
+
     Removes or replaces: / \\ : * ? " < > |
-    
+
     Args:
         title: Original filename/title
-        
+
     Returns:
         str: Sanitized filename safe for filesystem
     """
@@ -116,30 +114,30 @@ def sanitize_filename(title: str) -> str:
         ">": "",
         "|": "-",
     }
-    
+
     sanitized = title
     for bad_char, replacement in replacements.items():
         sanitized = sanitized.replace(bad_char, replacement)
-    
+
     # Remove multiple consecutive spaces or dashes
     sanitized = re.sub(r"[\s-]+", " ", sanitized).strip()
-    
+
     # Limit length to avoid filesystem issues
     max_length = 200
     if len(sanitized) > max_length:
         sanitized = sanitized[:max_length].strip()
-    
+
     return sanitized
 
 
 def get_video_metadata(url: str) -> Optional[Dict]:
     """Extract metadata from YouTube video without downloading
-    
+
     Uses yt-dlp --dump-json to get video information.
-    
+
     Args:
         url: YouTube video URL
-        
+
     Returns:
         dict: Metadata dictionary with keys: title, duration, url, video_id
               Returns None if extraction fails
@@ -151,9 +149,9 @@ def get_video_metadata(url: str) -> Optional[Dict]:
             text=True,
             check=True,
         )
-        
+
         data = json.loads(result.stdout)
-        
+
         return {
             "title": data.get("title", "Unknown"),
             "duration": data.get("duration", 0),  # in seconds
@@ -167,12 +165,12 @@ def get_video_metadata(url: str) -> Optional[Dict]:
 
 def get_playlist_metadata(url: str) -> Optional[Dict]:
     """Extract playlist metadata including all video URLs
-    
+
     Uses yt-dlp --dump-json to get playlist information.
-    
+
     Args:
         url: YouTube playlist URL
-        
+
     Returns:
         dict: Metadata dictionary with keys: title, video_urls
               Returns None if extraction fails
@@ -184,26 +182,26 @@ def get_playlist_metadata(url: str) -> Optional[Dict]:
             text=True,
             check=True,
         )
-        
+
         # Parse multiple JSON objects (one per line for each video)
         lines = result.stdout.strip().split("\n")
         videos = []
         playlist_title = None
-        
+
         for line in lines:
             if not line.strip():
                 continue
             data = json.loads(line)
-            
+
             # First entry contains playlist info
             if playlist_title is None and "title" in data:
                 playlist_title = data.get("playlist_title") or data.get("title")
-            
+
             # Extract video URL
             if "id" in data:
                 video_url = f"https://www.youtube.com/watch?v={data['id']}"
                 videos.append(video_url)
-        
+
         return {
             "title": playlist_title or "Unknown Playlist",
             "video_urls": videos,
@@ -215,10 +213,10 @@ def get_playlist_metadata(url: str) -> Optional[Dict]:
 
 def is_duplicate(url: str) -> bool:
     """Check if URL already exists in database
-    
+
     Args:
         url: YouTube URL to check
-        
+
     Returns:
         bool: True if URL already tracked in database
     """
@@ -231,10 +229,10 @@ def is_duplicate(url: str) -> bool:
 
 def get_song_by_url(url: str) -> Optional[Dict]:
     """Get song from database by URL
-    
+
     Args:
         url: YouTube URL
-        
+
     Returns:
         dict: Song dictionary or None if not found
     """
@@ -247,10 +245,10 @@ def get_song_by_url(url: str) -> Optional[Dict]:
 
 def path_exists(file_path: str) -> bool:
     """Check if file path exists on filesystem
-    
+
     Args:
         file_path: Path to check
-        
+
     Returns:
         bool: True if path exists
     """

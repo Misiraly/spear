@@ -6,3 +6,24 @@ version = "0.0.1"
 pythonpath = [
   "."
 ]
+
+[tool.black]
+line-length = 88
+target-version = ["py311"]
+
+[tool.mypy]
+ignore_missing_imports = true
+disallow_untyped_defs = true
+warn_return_any = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+no_implicit_optional = true
+
+[tool.isort]
+profile = "black"
+known_first_party = [
+    "cli_menu", "constants", "db_utils", "export_to_csv",
+    "listen_history", "play_song", "playback_timeline", "playlists",
+    "reader", "search", "song_metadata",
+    "youtube_downloader", "youtube_integration", "youtube_utils",
+]

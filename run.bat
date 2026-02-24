@@ -20,14 +20,25 @@ if defined SPEAR_VENV (
 ) else if exist ".venv\Scripts\activate.bat" (
     call ".venv\Scripts\activate.bat"
 ) else (
-    echo ERROR: No virtual environment found.
+    echo No virtual environment found. Creating .venv...
+    python -m venv .venv
+    if %ERRORLEVEL% NEQ 0 (
+        echo ERROR: Failed to create virtual environment.
+        echo Make sure Python is installed and on your PATH.
+        pause
+        exit /b 1
+    )
+    call ".venv\Scripts\activate.bat"
+    echo Installing dependencies...
+    pip install -r requirements.txt
+    if %ERRORLEVEL% NEQ 0 (
+        echo ERROR: Failed to install dependencies.
+        pause
+        exit /b 1
+    )
     echo.
-    echo Either:
-    echo   a^) Create a local venv:   python -m venv .venv
-    echo              then install:   .venv\Scripts\pip install -r requirements.txt
-    echo   b^) Set the SPEAR_VENV environment variable to your existing venv path.
-    pause
-    exit /b 1
+    echo Environment ready.
+    echo.
 )
 
 REM ── Run loop ─────────────────────────────────────────────────────────────────

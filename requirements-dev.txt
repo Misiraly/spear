@@ -3,3 +3,6 @@ isort
 flake8
 mypy
 pytest
+types-PyYAML
+vulture
+radon

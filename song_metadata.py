@@ -12,8 +12,7 @@ import constants as cv
 import reader
 from db_utils import get_connection as _get_connection
 from db_utils import row_to_song_dict as _row_to_song_dict
-from db_utils import \
-    row_to_song_dict_with_count as _row_to_song_dict_with_count
+from db_utils import row_to_song_dict_with_count as _row_to_song_dict_with_count
 from db_utils import validate_uid as _validate_uid
 
 # Constants
@@ -61,13 +60,13 @@ def init_database(db_path=DB_PATH):
         # Create indexes for faster queries
         cursor.execute(
             """
-            CREATE INDEX IF NOT EXISTS idx_title 
+            CREATE INDEX IF NOT EXISTS idx_title
             ON songs(title)
         """
         )
         cursor.execute(
             """
-            CREATE INDEX IF NOT EXISTS idx_add_date 
+            CREATE INDEX IF NOT EXISTS idx_add_date
             ON songs(add_date)
         """
         )
@@ -94,13 +93,11 @@ def _migrate_paths_to_filenames(db_path):
 
         updates = []
         for uid, path in rows:
-            if path and (os.sep in path or '/' in path):
+            if path and (os.sep in path or "/" in path):
                 updates.append((os.path.basename(path), uid))
 
         if updates:
-            cursor.executemany(
-                "UPDATE songs SET path = ? WHERE uid = ?", updates
-            )
+            cursor.executemany("UPDATE songs SET path = ? WHERE uid = ?", updates)
             conn.commit()
 
 
@@ -138,7 +135,7 @@ def add_song(uid, title, path, url=None, duration=None, add_date=None, db_path=D
         cursor = conn.cursor()
         cursor.execute(
             """
-            INSERT OR REPLACE INTO songs 
+            INSERT OR REPLACE INTO songs
             (uid, title, url, duration, add_date, path, last_modified)
             VALUES (?, ?, ?, ?, ?, ?, ?)
         """,
@@ -200,7 +197,7 @@ def update_song_path(uid, new_path, db_path=DB_PATH):
         cursor = conn.cursor()
         cursor.execute(
             """
-            UPDATE songs 
+            UPDATE songs
             SET path = ?, last_modified = ?
             WHERE uid = ?
         """,
@@ -211,7 +208,7 @@ def update_song_path(uid, new_path, db_path=DB_PATH):
 
 def update_song_title(uid, new_title, db_path=DB_PATH):
     """Update song title (database only, does not rename file)
-    
+
     Args:
         uid: Song UID
         new_title: New title for the song
@@ -221,7 +218,7 @@ def update_song_title(uid, new_title, db_path=DB_PATH):
         cursor = conn.cursor()
         cursor.execute(
             """
-            UPDATE songs 
+            UPDATE songs
             SET title = ?, last_modified = ?
             WHERE uid = ?
         """,
@@ -232,7 +229,7 @@ def update_song_title(uid, new_title, db_path=DB_PATH):
 
 def update_song_duration(uid, new_duration, db_path=DB_PATH):
     """Update song duration
-    
+
     Args:
         uid: Song UID
         new_duration: New duration in seconds
@@ -242,7 +239,7 @@ def update_song_duration(uid, new_duration, db_path=DB_PATH):
         cursor = conn.cursor()
         cursor.execute(
             """
-            UPDATE songs 
+            UPDATE songs
             SET duration = ?, last_modified = ?
             WHERE uid = ?
         """,
@@ -279,7 +276,7 @@ def get_songs_with_listen_count(limit=None, db_path=DB_PATH):
     with _get_connection(db_path) as conn:
         cursor = conn.cursor()
         query = """
-            SELECT 
+            SELECT
                 s.uid, s.title, s.url, s.duration, s.add_date, s.path,
                 COUNT(lh.id) as listen_count
             FROM songs s
@@ -296,15 +293,15 @@ def get_songs_with_listen_count(limit=None, db_path=DB_PATH):
 def get_random_song(db_path=DB_PATH):
     """
     Get a random song_uid from the songs table.
-    
+
     Returns song_uid or None if no songs exist.
     """
     with _get_connection(db_path) as conn:
         cursor = conn.cursor()
         cursor.execute(
             """
-            SELECT uid FROM songs 
-            ORDER BY RANDOM() 
+            SELECT uid FROM songs
+            ORDER BY RANDOM()
             LIMIT 1
         """
         )

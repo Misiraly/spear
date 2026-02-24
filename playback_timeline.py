@@ -56,7 +56,7 @@ def init_database(db_path=DB_PATH):
         # Create index for position-based queries
         cursor.execute(
             """
-            CREATE INDEX IF NOT EXISTS idx_timeline_position 
+            CREATE INDEX IF NOT EXISTS idx_timeline_position
             ON playback_timeline(position)
         """
         )
@@ -64,7 +64,7 @@ def init_database(db_path=DB_PATH):
         # Initialize cursor if it doesn't exist
         cursor.execute(
             """
-            INSERT OR IGNORE INTO playback_cursor (id, position) 
+            INSERT OR IGNORE INTO playback_cursor (id, position)
             VALUES (1, -1)
         """
         )
@@ -106,7 +106,7 @@ def get_current_song(db_path=DB_PATH):
         cursor = conn.cursor()
         cursor.execute(
             """
-            SELECT song_uid FROM playback_timeline 
+            SELECT song_uid FROM playback_timeline
             WHERE position = ?
         """,
             (cursor_pos,),
@@ -121,8 +121,8 @@ def get_timeline(db_path=DB_PATH):
         cursor = conn.cursor()
         cursor.execute(
             """
-            SELECT position, song_uid, added_at 
-            FROM playback_timeline 
+            SELECT position, song_uid, added_at
+            FROM playback_timeline
             ORDER BY position
         """
         )
@@ -141,7 +141,7 @@ def clear_timeline(db_path=DB_PATH):
 def skip_back(db_path=DB_PATH):
     """
     Skip to the previous song in the timeline.
-    
+
     Decrements cursor if > 0 and auto-skips deleted songs.
     Returns song_uid or None if at start or all past songs deleted.
     """
@@ -156,7 +156,7 @@ def skip_back(db_path=DB_PATH):
         for new_pos in range(cursor_pos - 1, -1, -1):
             cursor.execute(
                 """
-                SELECT song_uid FROM playback_timeline 
+                SELECT song_uid FROM playback_timeline
                 WHERE position = ?
             """,
                 (new_pos,),
@@ -177,7 +177,7 @@ def _shuffle_future(cursor_pos, db_path=DB_PATH):
         cursor = conn.cursor()
         cursor.execute(
             """
-            SELECT song_uid, position FROM playback_timeline 
+            SELECT song_uid, position FROM playback_timeline
             WHERE position > ?
             ORDER BY position
         """,
@@ -190,11 +190,11 @@ def _shuffle_future(cursor_pos, db_path=DB_PATH):
         random.shuffle(song_uids)
 
         # Update positions with shuffled song_uids
-        for idx, (original_uid, position) in enumerate(future_entries):
+        for idx, (_, position) in enumerate(future_entries):
             cursor.execute(
                 """
-                UPDATE playback_timeline 
-                SET song_uid = ? 
+                UPDATE playback_timeline
+                SET song_uid = ?
                 WHERE position = ?
             """,
                 (song_uids[idx], position),
@@ -205,11 +205,11 @@ def _shuffle_future(cursor_pos, db_path=DB_PATH):
 def skip_forward(shuffle=False, db_path=DB_PATH):
     """
     Skip to the next song in the timeline.
-    
+
     If no future exists, select a random song and append it.
     If shuffle=True, re-shuffle the future before advancing.
     Auto-skips deleted songs.
-    
+
     Returns song_uid or None if no songs exist in database.
     """
     cursor_pos = get_cursor(db_path)
@@ -220,7 +220,7 @@ def skip_forward(shuffle=False, db_path=DB_PATH):
         # Check if future exists
         cursor.execute(
             """
-            SELECT COUNT(*) FROM playback_timeline 
+            SELECT COUNT(*) FROM playback_timeline
             WHERE position > ?
         """,
             (cursor_pos,),
@@ -256,7 +256,7 @@ def skip_forward(shuffle=False, db_path=DB_PATH):
         # Find next valid song
         cursor.execute(
             """
-            SELECT position, song_uid FROM playback_timeline 
+            SELECT position, song_uid FROM playback_timeline
             WHERE position > ?
             ORDER BY position
         """,
@@ -298,7 +298,7 @@ def _renumber_positions(db_path=DB_PATH):
         if current_cursor >= 0:
             cursor.execute(
                 """
-                SELECT song_uid FROM playback_timeline 
+                SELECT song_uid FROM playback_timeline
                 WHERE position = ?
             """,
                 (current_cursor,),
@@ -309,7 +309,7 @@ def _renumber_positions(db_path=DB_PATH):
         # Get all entries ordered by position
         cursor.execute(
             """
-            SELECT id, song_uid, added_at FROM playback_timeline 
+            SELECT id, song_uid, added_at FROM playback_timeline
             ORDER BY position
         """
         )
@@ -319,7 +319,7 @@ def _renumber_positions(db_path=DB_PATH):
         cursor.execute("DELETE FROM playback_timeline")
 
         new_cursor = -1
-        for new_pos, (entry_id, song_uid, added_at) in enumerate(entries):
+        for new_pos, (_, song_uid, added_at) in enumerate(entries):
             cursor.execute(
                 """
                 INSERT INTO playback_timeline (song_uid, position, added_at)
@@ -353,7 +353,7 @@ def _prune_past(limit=MAX_PAST_ENTRIES, db_path=DB_PATH):
         # Count past entries
         cursor.execute(
             """
-            SELECT COUNT(*) FROM playback_timeline 
+            SELECT COUNT(*) FROM playback_timeline
             WHERE position < ?
         """,
             (cursor_pos,),
@@ -365,7 +365,7 @@ def _prune_past(limit=MAX_PAST_ENTRIES, db_path=DB_PATH):
             to_delete = past_count - limit
             cursor.execute(
                 """
-                SELECT position FROM playback_timeline 
+                SELECT position FROM playback_timeline
                 WHERE position < ?
                 ORDER BY position
                 LIMIT ?
@@ -393,7 +393,7 @@ def _prune_past(limit=MAX_PAST_ENTRIES, db_path=DB_PATH):
 def append_song(song_uid, db_path=DB_PATH):
     """
     Append a song to the timeline, replacing the future.
-    
+
     Deletes all future entries, appends the song, advances cursor.
     """
     _validate_uid(song_uid, "song_uid")

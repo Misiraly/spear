@@ -63,20 +63,20 @@ def generate_uid_from_url(url):
     """
     # Hash the URL
     hash_bytes = hashlib.sha256(url.encode("utf-8")).digest()
-    
+
     # Convert to base62 (alphanumeric only)
     chars = string.ascii_letters + string.digits
     hash_int = int.from_bytes(hash_bytes, byteorder="big")
-    
+
     result = []
     while hash_int > 0 and len(result) < 16:
         hash_int, remainder = divmod(hash_int, 62)
         result.append(chars[remainder])
-    
+
     # Pad if needed
     while len(result) < 16:
         result.append(chars[0])
-    
+
     return "".join(result[:16])
 
 
@@ -161,17 +161,6 @@ def row_to_playlist_item_dict(row):
         "title": row[2],
         "duration": row[3],
         "added_at": row[4],
-    }
-
-
-def row_to_history_dict(row):
-    """Convert listen history row to dict with fields: id, song_uid, listen_date, listen_time, source"""
-    return {
-        "id": row[0],
-        "song_uid": row[1],
-        "listen_date": row[2],
-        "listen_time": row[3],
-        "source": row[4],
     }
 
 

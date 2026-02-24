@@ -278,8 +278,7 @@ class TestTopSongsQueries(TestListenHistory):
             {"uid": "songABCDEFGH0000", "title": "Test Song 3", "listen_count": 1},
         )
 
-    def test_get_top_songs_all_time_with_limit(self):
-        """Test getting top songs with limit"""
+    def _setup_top_songs_data(self):
         test_data = [
             ("song1111AAAA1111", datetime.now()),
             ("song2222BBBB2222", datetime.now()),
@@ -296,6 +295,10 @@ class TestTopSongsQueries(TestListenHistory):
                 ("song3333CCCC3333", "Song C"),
             ]
         )
+
+    def test_get_top_songs_all_time_with_limit(self):
+        """Test getting top songs with limit"""
+        self._setup_top_songs_data()
 
         result = listen_history.get_top_songs_all_time(limit=2, db_path=self.db_path)
 
@@ -305,22 +308,7 @@ class TestTopSongsQueries(TestListenHistory):
 
     def test_get_top_songs_all_time_reverse(self):
         """Test getting least played songs (reverse order)"""
-        test_data = [
-            ("song1111AAAA1111", datetime.now()),
-            ("song2222BBBB2222", datetime.now()),
-            ("song2222BBBB2222", datetime.now()),
-            ("song3333CCCC3333", datetime.now()),
-            ("song3333CCCC3333", datetime.now()),
-            ("song3333CCCC3333", datetime.now()),
-        ]
-        self._insert_test_data(test_data)
-        self._insert_song_metadata(
-            [
-                ("song1111AAAA1111", "Song A"),
-                ("song2222BBBB2222", "Song B"),
-                ("song3333CCCC3333", "Song C"),
-            ]
-        )
+        self._setup_top_songs_data()
 
         result = listen_history.get_top_songs_all_time(
             reverse=True, db_path=self.db_path

@@ -1,0 +1,16 @@
+[flake8]
+# Match black's line length
+max-line-length = 88
+
+# E203 — whitespace before ':' (black formats slices this way)
+# W503 — line break before binary operator (black's style)
+extend-ignore = E203, W503
+
+# Exclude generated/cache directories
+exclude =
+    .git,
+    __pycache__,
+    .venv,
+    build,
+    dist,
+    _scratch,

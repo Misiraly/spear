@@ -273,11 +273,14 @@ class TestDeleteSong(TestSongMetadata):
 class TestGetSongsAlphabetically(TestSongMetadata):
     """Tests for alphabetical sorting"""
 
-    def test_get_songs_alphabetically_ascending(self):
-        """Test getting songs A-Z"""
+    def _add_alphabetical_test_songs(self):
         song_metadata.add_song("song1111AAAA1111", "Zebra", "/p1", db_path=self.db_path)
         song_metadata.add_song("song2222BBBB2222", "Alpha", "/p2", db_path=self.db_path)
         song_metadata.add_song("song3333CCCC3333", "Beta", "/p3", db_path=self.db_path)
+
+    def test_get_songs_alphabetically_ascending(self):
+        """Test getting songs A-Z"""
+        self._add_alphabetical_test_songs()
 
         songs = song_metadata.get_songs_alphabetically(db_path=self.db_path)
         titles = [s["title"] for s in songs]
@@ -285,9 +288,7 @@ class TestGetSongsAlphabetically(TestSongMetadata):
 
     def test_get_songs_alphabetically_descending(self):
         """Test getting songs Z-A"""
-        song_metadata.add_song("song1111AAAA1111", "Zebra", "/p1", db_path=self.db_path)
-        song_metadata.add_song("song2222BBBB2222", "Alpha", "/p2", db_path=self.db_path)
-        song_metadata.add_song("song3333CCCC3333", "Beta", "/p3", db_path=self.db_path)
+        self._add_alphabetical_test_songs()
 
         songs = song_metadata.get_songs_alphabetically(
             reverse=True, db_path=self.db_path

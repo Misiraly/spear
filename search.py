@@ -18,7 +18,6 @@ song_metadata.get_songs_alphabetically() and friends.
 """
 
 import re
-from typing import Optional
 
 from rapidfuzz.distance import Levenshtein
 

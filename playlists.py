@@ -6,7 +6,6 @@ stored in SQLite alongside the listen history.
 """
 
 import os
-import random
 from datetime import datetime
 
 import constants as cv
@@ -62,13 +61,13 @@ def init_database(db_path=DB_PATH):
         # Create indexes for faster queries
         cursor.execute(
             """
-            CREATE INDEX IF NOT EXISTS idx_playlist_position 
+            CREATE INDEX IF NOT EXISTS idx_playlist_position
             ON playlist_items(playlist_uid, position)
         """
         )
         cursor.execute(
             """
-            CREATE INDEX IF NOT EXISTS idx_song_uid 
+            CREATE INDEX IF NOT EXISTS idx_song_uid
             ON playlist_items(song_uid)
         """
         )
@@ -482,7 +481,7 @@ def remove_by_position(playlist_uid, position, db_path=DB_PATH):
         if not result:
             return False
 
-        pos_to_delete, max_position = result
+        _, max_position = result
 
         # Delete the item
         cursor.execute(
@@ -673,7 +672,7 @@ def get_playlist_songs(playlist_uid, db_path=DB_PATH):
         cursor = conn.cursor()
         cursor.execute(
             """
-            SELECT 
+            SELECT
                 pi.position,
                 pi.song_uid,
                 s.title,
@@ -698,7 +697,7 @@ def find_playlists_for_song(song_uid, db_path=DB_PATH):
         cursor = conn.cursor()
         cursor.execute(
             """
-            SELECT 
+            SELECT
                 p.uid,
                 p.name,
                 pi.position

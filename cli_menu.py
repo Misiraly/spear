@@ -9,19 +9,131 @@ import os
 import random
 import re
 import sys
+
 import constants as cv
 import listen_history
+import play_song
 import playback_timeline
+import playlists
 import search
 import song_metadata
-import play_song
-import playlists
-import youtube_utils
 import youtube_integration
-
+import youtube_utils
 
 # Track last played song for replay function
 _last_played_uid = None
+
+
+def _try_num_command(arg, name, handler):
+    """Parse a numeric argument and invoke *handler*, or print an error."""
+    try:
+        num = int(arg.strip())
+        handler(num)
+    except ValueError:
+        print(f"Invalid {name} command. Usage: {name} <number>")
+
+
+def _handle_input_fallback(user_input, songs):
+    """Handle URL, ad-hoc queue, song number, or fuzzy search.
+
+    Returns:
+        bool: True if the library should be refreshed afterwards.
+    """
+    url_type = youtube_utils.detect_url_type(user_input)
+
+    if url_type == "video":
+        _handle_video_download(user_input)
+        return True
+
+    if url_type == "playlist":
+        _handle_playlist_download(user_input)
+        return True
+
+    # Ad-hoc queue: 2+ numbers separated by commas/spaces
+    tokens = user_input.replace(",", " ").split()
+    if len(tokens) >= 2 and all(t.isdigit() for t in tokens):
+        _handle_adhoc_queue(tokens, songs)
+        return True
+
+    # Plain number → play that song, anything else → search
+    limit, query = _parse_search_limit(user_input)
+    try:
+        choice = int(query)
+        _handle_song_selection(str(choice), songs)
+        return True
+    except ValueError:
+        _handle_search(query, songs, limit)
+        return False
+
+
+def _dispatch_command(user_input, songs):
+    """Route a single user command to its handler.
+
+    Returns:
+        bool: True if the library should be refreshed and reprinted.
+    """
+    cmd = user_input.lower()
+
+    # --- exact-match commands (dict lookup) ---
+    exact_handlers = {
+        "h": (lambda: _show_help(), False),
+        "help": (lambda: _show_help(), False),
+        "r": (lambda: _handle_replay(), True),
+        "p": (lambda: _playlist_menu(), True),
+        "t": (lambda: _display_timeline(), False),
+        "shuffle": (lambda: _handle_shuffle_all(songs), True),
+        "sh": (lambda: _handle_shuffle_all(songs), True),
+        "rand": (lambda: _handle_random_offer(user_input, songs), True),
+        "date": (lambda: _display_by_date(songs, reverse=False), False),
+        "date r": (lambda: _display_by_date(songs, reverse=True), False),
+        "top": (lambda: _display_by_play_count(songs, user_input), False),
+        "--update-ytdlp": (lambda: _handle_update_ytdlp(), False),
+    }
+    if cmd in exact_handlers:
+        handler, refresh = exact_handlers[cmd]
+        handler()
+        return refresh
+
+    # --- prefix commands (table-driven iteration) ---
+    prefix_handlers = [
+        (
+            "del ",
+            lambda arg: _try_num_command(
+                arg, "del", lambda n: _handle_delete(n, songs)
+            ),
+            True,
+        ),
+        (
+            "ren ",
+            lambda arg: _try_num_command(
+                arg, "ren", lambda n: _handle_rename(n, songs)
+            ),
+            True,
+        ),
+        (
+            "re ",
+            lambda arg: _try_num_command(
+                arg, "re", lambda n: _handle_redownload(n, songs)
+            ),
+            True,
+        ),
+        ("s ", lambda arg: _handle_stream(arg), True),
+        ("loop ", lambda arg: _handle_loop(user_input, songs), True),
+        ("rand ", lambda arg: _handle_random_offer(user_input, songs), True),
+        ("top ", lambda arg: _display_by_play_count(songs, user_input), False),
+    ]
+    for prefix, handler, refresh in prefix_handlers:
+        if cmd.startswith(prefix):
+            handler(cmd[len(prefix) :])
+            return refresh
+
+    # --- quick-add (case-sensitive "+") ---
+    if user_input.startswith("+"):
+        _handle_quick_add(user_input[1:].strip(), songs)
+        return False
+
+    # --- fallback: URL / ad-hoc queue / number / search ---
+    return _handle_input_fallback(user_input, songs)
 
 
 def display_menu():
@@ -32,168 +144,32 @@ def display_menu():
     that list is silently refreshed (without reprinting) after any operation that
     modifies the library so that song indices always stay correct.
     """
-    # --- initial load & display ---
     songs = song_metadata.get_songs_alphabetically()
     _print_library(songs)
 
     while True:
         user_input = input("> ").strip()
+        cmd = user_input.lower()
 
-        # Handle quit commands
-        if user_input.lower() in ['q', 'x']:
+        if cmd in ("q", "x"):
             print("\nGoodbye!")
             break
 
-        # Handle help command
-        if user_input.lower() in ['h', 'help']:
-            _show_help()
-            continue
-
-        # Explicit library reprint
-        if user_input.lower() == 'l':
+        if cmd == "l":
             songs = song_metadata.get_songs_alphabetically()
             _print_library(songs)
             continue
 
-        # Handle replay last played
-        if user_input.lower() == 'r':
-            _handle_replay()
+        refresh = _dispatch_command(user_input, songs)
+
+        if refresh:
             songs = song_metadata.get_songs_alphabetically()
             _print_library(songs)
-            continue
-
-        # Check for delete command (del <number>)
-        if user_input.lower().startswith('del '):
-            try:
-                num = int(user_input[4:].strip())
-                _handle_delete(num, songs)
-            except ValueError:
-                print("Invalid delete command. Usage: del <number>")
-            songs = song_metadata.get_songs_alphabetically()
-            _print_library(songs)
-            continue
-
-        # Check for rename command (ren <number>)
-        if user_input.lower().startswith('ren '):
-            try:
-                num = int(user_input[4:].strip())
-                _handle_rename(num, songs)
-            except ValueError:
-                print("Invalid rename command. Usage: ren <number>")
-            songs = song_metadata.get_songs_alphabetically()
-            _print_library(songs)
-            continue
-
-        # Check for re-download command (re <number>)
-        if user_input.lower().startswith('re '):
-            try:
-                num = int(user_input[3:].strip())
-                _handle_redownload(num, songs)
-            except ValueError:
-                print("Invalid re-download command. Usage: re <number>")
-            songs = song_metadata.get_songs_alphabetically()
-            _print_library(songs)
-            continue
-
-        # Check for playlist menu command
-        if user_input.lower() == 'p':
-            _playlist_menu()
-            songs = song_metadata.get_songs_alphabetically()
-            _print_library(songs)
-            continue
-
-        # Check for quick-add to playlist (+ <song_num> <playlist_name>)
-        if user_input.startswith('+'):
-            _handle_quick_add(user_input[1:].strip(), songs)
-            continue
-
-        # Check for stream command (s <url>)
-        if user_input.lower().startswith('s '):
-            url = user_input[2:].strip()
-            _handle_stream(url)
-            _print_library(songs)
-            continue
-
-        # Shuffle and play all songs in the library
-        if user_input.lower() in ['shuffle', 'sh']:
-            _handle_shuffle_all(songs)
-            songs = song_metadata.get_songs_alphabetically()
-            _print_library(songs)
-            continue
-
-        # Suggest N random songs for selection
-        if user_input.lower() == 'rand' or user_input.lower().startswith('rand '):
-            _handle_random_offer(user_input, songs)
-            songs = song_metadata.get_songs_alphabetically()
-            _print_library(songs)
-            continue
-
-        # Loop a single song on repeat
-        if user_input.lower().startswith('loop '):
-            _handle_loop(user_input, songs)
-            songs = song_metadata.get_songs_alphabetically()
-            _print_library(songs)
-            continue
-
-        # Timeline ±10 view
-        if user_input.lower() == 't':
-            _display_timeline()
-            continue
-
-        # Songs by date added  (date / date r)
-        if user_input.lower() in ['date', 'date r']:
-            _display_by_date(songs, reverse=(user_input.lower() == 'date r'))
-            continue
-
-        # Songs by play count  (top [modifier])
-        if user_input.lower() == 'top' or user_input.lower().startswith('top '):
-            _display_by_play_count(songs, user_input)
-            continue
-
-        # Update yt-dlp via launcher (exit code 100 triggers pip update in run.bat)
-        if user_input.lower() == '--update-ytdlp':
-            _handle_update_ytdlp()
-            continue
-
-        # Check if input is a URL
-        url_type = youtube_utils.detect_url_type(user_input)
-
-        if url_type == "video":
-            # Download video and play
-            _handle_video_download(user_input)
-            songs = song_metadata.get_songs_alphabetically()
-            _print_library(songs)
-
-        elif url_type == "playlist":
-            # Confirm and download playlist
-            _handle_playlist_download(user_input)
-            songs = song_metadata.get_songs_alphabetically()
-            _print_library(songs)
-
-        else:
-            # Check for ad-hoc queue: 2+ numbers separated by commas/spaces
-            tokens = user_input.replace(',', ' ').split()
-            if len(tokens) >= 2 and all(t.isdigit() for t in tokens):
-                _handle_adhoc_queue(tokens, songs)
-                songs = song_metadata.get_songs_alphabetically()
-                _print_library(songs)
-            else:
-                # Parse optional /N result-count suffix  (e.g. "dark side /20")
-                limit, query = _parse_search_limit(user_input)
-                try:
-                    # Plain number → play that song
-                    choice = int(query)
-                    _handle_song_selection(str(choice), songs)
-                    songs = song_metadata.get_songs_alphabetically()
-                    _print_library(songs)
-                except ValueError:
-                    # Anything else → fuzzy search
-                    _handle_search(query, songs, limit)
 
 
 def _print_library(songs):
     """Print song library in two columns
-    
+
     Args:
         songs: List of song dictionaries
     """
@@ -201,28 +177,30 @@ def _print_library(songs):
     print("\n" + "=" * width)
     print("SPEAR MUSIC LIBRARY".center(width))
     print("=" * width)
-    
+
     if not songs:
         print("\nNo songs in library yet. Add songs by entering a YouTube URL.")
         print("\nCommands: [URL] download | s [URL] stream | r/h/q\n")
         return
-    
+
     # Print songs in two columns
     col_width = width // 2
     half = (len(songs) + 1) // 2  # Round up for odd numbers
-    
+
     for i in range(half):
         left_idx = i
         right_idx = i + half
-        
+
         # Left column
         left_song = songs[left_idx]
         left_num = left_idx + 1
-        title_w = col_width - 11  # 4 (num) + 1 (sp) + title + 1 (sp) + 5 (dur) = col_width
+        title_w = (
+            col_width - 11
+        )  # 4 (num) + 1 (sp) + title + 1 (sp) + 5 (dur) = col_width
         left_title = _truncate_title(left_song["title"], title_w)
         left_duration = _format_duration(left_song.get("duration", 0))
         left_text = f"{left_num:<4} {left_title:<{title_w}} {left_duration:>5}"
-        
+
         # Right column (if exists)
         if right_idx < len(songs):
             right_song = songs[right_idx]
@@ -230,45 +208,49 @@ def _print_library(songs):
             right_title = _truncate_title(right_song["title"], title_w)
             right_duration = _format_duration(right_song.get("duration", 0))
             right_text = f"{right_num:<4} {right_title:<{title_w}} {right_duration:>5}"
-            
+
             # Print both columns
             print(f"{left_text}  {right_text}")
         else:
             # Only left column
             print(left_text)
-    
+
     # Command strip
-    print("\n[num] play | <text> search | shuffle | rand [N] | loop [num] | t | date | top".center(width))
+    print(
+        "\n[num] play | <text> search | shuffle | rand [N] | loop [num] | t | date | top".center(
+            width
+        )
+    )
     print("del/ren/re [num] | + [num] [pl] | p | l | r/h/q\n".center(width))
 
 
 def _truncate_title(title, max_length):
     """Truncate title with ellipsis if too long
-    
+
     Args:
         title: Song title
         max_length: Maximum length
-        
+
     Returns:
         str: Truncated title
     """
     if len(title) <= max_length:
         return title
-    return title[:max_length - 3] + "..."
+    return title[: max_length - 3] + "..."
 
 
 def _format_duration(seconds):
     """Format duration in seconds as MM:SS
-    
+
     Args:
         seconds: Duration in seconds
-        
+
     Returns:
         str: Formatted duration string
     """
     if seconds <= 0:
         return "0:00"
-    
+
     minutes = seconds // 60
     secs = seconds % 60
     return f"{minutes}:{secs:02d}"
@@ -276,7 +258,7 @@ def _format_duration(seconds):
 
 def _handle_song_selection(user_input, songs):
     """Handle song number selection
-    
+
     Args:
         user_input: User input string
         songs: List of songs
@@ -284,7 +266,7 @@ def _handle_song_selection(user_input, songs):
     if not songs:
         print("No songs available.")
         return
-    
+
     try:
         choice = int(user_input)
         if 1 <= choice <= len(songs):
@@ -298,12 +280,12 @@ def _handle_song_selection(user_input, songs):
 
 def _handle_video_download(url):
     """Download video, add to library, and play immediately
-    
+
     Args:
         url: YouTube video URL
     """
     uid = youtube_integration.download_and_add_video(url)
-    
+
     if uid:
         # Get the newly added song and play it
         song = song_metadata.get_song(uid)
@@ -317,34 +299,34 @@ def _handle_video_download(url):
 
 def _handle_playlist_download(url):
     """Confirm and download playlist
-    
+
     Args:
         url: YouTube playlist URL
     """
     # Get playlist info first
     playlist_metadata = youtube_utils.get_playlist_metadata(url)
-    
+
     if not playlist_metadata:
         print("\n✗ Failed to fetch playlist information")
         input("\nPress Enter to continue...")
         return
-    
+
     playlist_title = playlist_metadata["title"]
     video_count = len(playlist_metadata["video_urls"])
-    
+
     # Confirm with user
     print(f"\nPlaylist: {playlist_title}")
     print(f"Videos: {video_count}")
     confirm = input(f"\nDownload {video_count} videos? (y/n): ").strip().lower()
-    
-    if confirm == 'y':
-        print(f"\n📥 Downloading playlist...")
+
+    if confirm == "y":
+        print("\n📥 Downloading playlist...")
         playlist_uid = youtube_integration.download_and_add_playlist(url)
-        
+
         if playlist_uid:
-            print(f"\n✓ Playlist download complete!")
+            print("\n✓ Playlist download complete!")
         else:
-            print(f"\n✗ Playlist download failed")
+            print("\n✗ Playlist download failed")
             input("\nPress Enter to continue...")
     else:
         print("\nPlaylist download cancelled")
@@ -499,14 +481,14 @@ def _handle_update_ytdlp():
     print("\nThis will close Spear, update yt-dlp, then restart automatically.")
     print("(Only works when launched via run.bat — otherwise update manually.)")
     confirm = input("Proceed? (y/n): ").strip().lower()
-    if confirm == 'y':
+    if confirm == "y":
         print("\nExiting to update yt-dlp...")
         sys.exit(100)
 
 
 def _handle_stream(url):
     """Stream from URL without downloading
-    
+
     Args:
         url: URL to stream from
     """
@@ -516,12 +498,10 @@ def _handle_stream(url):
 
 def _handle_replay():
     """Replay the last played song"""
-    global _last_played_uid
-    
     if not _last_played_uid:
         print("\nNo song played yet")
         return
-    
+
     song = song_metadata.get_song(_last_played_uid)
     if song:
         print(f"\n▶ Replaying: {song['title']}\n")
@@ -532,7 +512,7 @@ def _handle_replay():
 
 def _handle_delete(num, songs):
     """Delete a song from library and disk
-    
+
     Args:
         num: Song number (1-indexed)
         songs: List of songs
@@ -540,36 +520,38 @@ def _handle_delete(num, songs):
     if not songs or num < 1 or num > len(songs):
         print(f"Invalid song number: {num}")
         return
-    
+
     song = songs[num - 1]
     title = song.get("title", "Unknown")
     path = song.get("path")
     uid = song.get("uid")
-    
+
     # Confirm deletion
-    confirm = input(f"\nDelete '{title}' from library and disk? (y/n): ").strip().lower()
-    
-    if confirm == 'y':
+    confirm = (
+        input(f"\nDelete '{title}' from library and disk? (y/n): ").strip().lower()
+    )
+
+    if confirm == "y":
         # Delete from database
         song_metadata.delete_song(uid)
-        
+
         # Delete file from disk
         full_path = song_metadata.resolve_path(path)
         if full_path and os.path.exists(full_path):
             try:
                 os.remove(full_path)
-                print(f"✓ Deleted from library and disk")
+                print("✓ Deleted from library and disk")
             except OSError as e:
                 print(f"✓ Deleted from library (file deletion failed: {e})")
         else:
-            print(f"✓ Deleted from library (file not found)")
+            print("✓ Deleted from library (file not found)")
     else:
         print("Delete cancelled")
 
 
 def _handle_rename(num, songs):
     """Rename a song in the database only
-    
+
     Args:
         num: Song number (1-indexed)
         songs: List of songs
@@ -577,18 +559,18 @@ def _handle_rename(num, songs):
     if not songs or num < 1 or num > len(songs):
         print(f"Invalid song number: {num}")
         return
-    
+
     song = songs[num - 1]
     old_title = song.get("title", "Unknown")
     uid = song.get("uid")
-    
+
     print(f"\nCurrent title: {old_title}")
     new_title = input("New title: ").strip()
-    
+
     if not new_title:
         print("Rename cancelled (empty title)")
         return
-    
+
     # Update title in database
     song_metadata.update_song_title(uid, new_title)
     print(f"✓ Renamed to: {new_title}")
@@ -596,7 +578,7 @@ def _handle_rename(num, songs):
 
 def _handle_redownload(num, songs):
     """Re-download a song to update file and duration
-    
+
     Args:
         num: Song number (1-indexed)
         songs: List of songs
@@ -604,13 +586,13 @@ def _handle_redownload(num, songs):
     if not songs or num < 1 or num > len(songs):
         print(f"Invalid song number: {num}")
         return
-    
+
     song = songs[num - 1]
     uid = song.get("uid")
-    
+
     # Re-download
     success = youtube_integration.redownload_song(uid)
-    
+
     if not success:
         input("\nPress Enter to continue...")
 
@@ -773,9 +755,9 @@ def _display_by_play_count(songs, user_input):
     parts = user_input.strip().split(maxsplit=1)
     sub = parts[1].strip() if len(parts) > 1 else ""
 
-    reverse = sub.endswith('r') and sub != 'r'  # 'r' alone = all-time reverse
+    reverse = sub.endswith("r") and sub != "r"  # 'r' alone = all-time reverse
     # Strip trailing 'r' for period lookup
-    period_key = sub.rstrip('r').strip()
+    period_key = sub.rstrip("r").strip()
 
     # Dispatch
     if sub == "" or sub == "r":
@@ -795,7 +777,9 @@ def _display_by_play_count(songs, user_input):
         period_label = f"LAST {days} DAYS"
         ranked = listen_history.get_top_songs_last_n_days(days, reverse=reverse)
     else:
-        print(f"Unknown top command: '{user_input}'  (try: top / top w / top m / top y / top 30)")
+        print(
+            f"Unknown top command: '{user_input}'  (try: top / top w / top m / top y / top 30)"
+        )
         return
 
     direction = "LEAST PLAYED" if reverse else "MOST PLAYED"
@@ -829,6 +813,7 @@ def _display_by_play_count(songs, user_input):
 # ============================================================================
 # QUEUE / PLAYBACK HELPER FUNCTIONS
 # ============================================================================
+
 
 def _handle_adhoc_queue(tokens, songs):
     """Play songs by index list as an ad-hoc queue (not saved as a playlist).
@@ -964,52 +949,53 @@ def _handle_loop(user_input, songs):
 # PLAYLIST MENU FUNCTIONS
 # ============================================================================
 
+
 def _playlist_menu():
     """Display playlist management menu"""
     while True:
         all_playlists = playlists.get_all_playlists()
         _display_playlists(all_playlists)
-        
+
         user_input = input("> ").strip()
-        
+
         # Back to main menu
-        if user_input.lower() in ['q', 'x', 'b']:
+        if user_input.lower() in ["q", "x", "b"]:
             break
-        
+
         # Create playlist
-        if user_input.lower() == 'c':
+        if user_input.lower() == "c":
             _handle_create_playlist()
             continue
-        
+
         # Delete playlist
-        if user_input.lower().startswith('del '):
+        if user_input.lower().startswith("del "):
             try:
                 num = int(user_input[4:].strip())
                 _handle_delete_playlist(num, all_playlists)
             except ValueError:
                 print("Invalid command. Usage: del <number>")
             continue
-        
+
         # Rename playlist
-        if user_input.lower().startswith('ren '):
+        if user_input.lower().startswith("ren "):
             try:
                 num = int(user_input[4:].strip())
                 _handle_rename_playlist(num, all_playlists)
             except ValueError:
                 print("Invalid command. Usage: ren <number>")
             continue
-        
+
         # Duplicate playlist
-        if user_input.lower().startswith('dup '):
+        if user_input.lower().startswith("dup "):
             try:
                 num = int(user_input[4:].strip())
                 _handle_duplicate_playlist(num, all_playlists)
             except ValueError:
                 print("Invalid command. Usage: dup <number>")
             continue
-        
+
         # Merge playlists
-        if user_input.lower().startswith('merge '):
+        if user_input.lower().startswith("merge "):
             parts = user_input[6:].strip().split()
             if len(parts) == 2:
                 try:
@@ -1021,7 +1007,7 @@ def _playlist_menu():
             else:
                 print("Invalid command. Usage: merge <src_num> <dest_num>")
             continue
-        
+
         # Enter playlist detail view
         try:
             num = int(user_input)
@@ -1039,26 +1025,26 @@ def _display_playlists(all_playlists):
     print("\n" + "=" * width)
     print("PLAYLISTS".center(width))
     print("=" * width)
-    
+
     if not all_playlists:
         print("\nNo playlists yet. Press 'c' to create one.")
         print("\nCommands: c create | q back\n")
         return
-    
+
     col_width = width // 2
     half = (len(all_playlists) + 1) // 2
-    
+
     for i in range(half):
         left_idx = i
         right_idx = i + half
-        
+
         # Left column
         pl = all_playlists[left_idx]
         stats = playlists.get_playlist_stats(pl["uid"])
         count = stats["song_count"] if stats else 0
         empty_tag = " (empty)" if count == 0 else ""
         left_text = f"{left_idx + 1}  {_truncate_title(pl['name'], col_width - 18)} ({count} songs){empty_tag}"
-        
+
         # Right column
         if right_idx < len(all_playlists):
             pl_r = all_playlists[right_idx]
@@ -1069,66 +1055,66 @@ def _display_playlists(all_playlists):
             print(f"{left_text:<{col_width}}{right_text}")
         else:
             print(left_text)
-    
+
     print("\n[num] view | c create | del/ren/dup [num] | merge [src] [dest] | q back\n")
 
 
 def _playlist_detail_menu(playlist):
     """Display and manage a single playlist's contents"""
     playlist_uid = playlist["uid"]
-    
+
     while True:
         songs = playlists.get_playlist_songs(playlist_uid)
         pl_data = playlists.get_playlist(playlist_uid)
-        
+
         if not pl_data:
             print("Playlist not found")
             break
-        
+
         _display_playlist_songs(pl_data, songs)
-        
+
         user_input = input("> ").strip()
-        
+
         # Back to playlist menu
-        if user_input.lower() in ['q', 'x', 'b']:
+        if user_input.lower() in ["q", "x", "b"]:
             break
-        
+
         # Play all
-        if user_input.lower() == 'play':
+        if user_input.lower() == "play":
             if not songs:
                 print("Playlist is empty")
             else:
                 _play_playlist(songs, shuffle=False)
             continue
-        
+
         # Play shuffled
-        if user_input.lower() == 'play shuffle':
+        if user_input.lower() == "play shuffle":
             if not songs:
                 print("Playlist is empty")
             else:
                 _play_playlist(songs, shuffle=True)
             continue
-        
+
         # Add song from library
-        if user_input.lower().startswith('add '):
+        if user_input.lower().startswith("add "):
             try:
                 song_num = int(user_input[4:].strip())
                 _handle_add_song_to_playlist(playlist_uid, song_num)
             except ValueError:
                 print("Invalid command. Usage: add <song_number>")
             continue
-        
+
         # Remove song at position
-        if user_input.lower().startswith('rm '):
+        if user_input.lower().startswith("rm "):
             try:
                 pos = int(user_input[3:].strip())
                 _handle_remove_from_playlist(playlist_uid, pos, songs)
             except ValueError:
                 print("Invalid command. Usage: rm <position>")
             continue
-        
+
         # Move song
-        if user_input.lower().startswith('mv '):
+        if user_input.lower().startswith("mv "):
             parts = user_input[3:].strip().split()
             if len(parts) == 2:
                 try:
@@ -1140,12 +1126,12 @@ def _playlist_detail_menu(playlist):
             else:
                 print("Invalid command. Usage: mv <from> <to>")
             continue
-        
+
         # Clear playlist
-        if user_input.lower() == 'clear':
+        if user_input.lower() == "clear":
             _handle_clear_playlist(playlist_uid, pl_data["name"])
             continue
-        
+
         # Play song at position
         try:
             pos = int(user_input)
@@ -1168,25 +1154,25 @@ def _display_playlist_songs(playlist, songs):
     print("\n" + "=" * width)
     print(f"PLAYLIST: {playlist['name']}".center(width))
     print("=" * width)
-    
+
     if not songs:
         print("\n(empty playlist)")
         print("\nCommands: add <num> | play | q back\n")
         return
-    
+
     # Show songs with positions
     for song in songs:
         pos = song["position"]
         title = _truncate_title(song.get("title") or "Unknown", width - 15)
         duration = _format_duration(song.get("duration") or 0)
         print(f"  {pos:<4} {title:<{width - 15}} {duration:>5}")
-    
+
     # Stats
     stats = playlists.get_playlist_stats(playlist["uid"])
     if stats:
         total_dur = _format_duration(stats["total_duration"])
         print(f"\n  Total: {stats['song_count']} songs, {total_dur}")
-    
+
     print("\n[pos] play | play [shuffle] | add/rm [num] | mv [from] [to] | clear | q\n")
 
 
@@ -1209,13 +1195,13 @@ def _play_playlist(songs, shuffle=False):
     for i, song_item in enumerate(song_list):
         song = song_metadata.get_song(song_item["uid"])
         if not song:
-            print(f"Skipping: song not found in library")
+            print("Skipping: song not found in library")
             # Keep cursor in sync even for skipped entries
             if i < len(song_list) - 1:
                 playback_timeline.advance_cursor()
             continue
 
-        print(f"\n[{i + 1}/{len(song_list)}] {song['title']}")
+        print(f"\n[{i + 1}/{len(song_list)}]")
         _last_played_uid = song["uid"]
         # _play_song returns True if the user navigated away via G/H
         navigated = _play_song(song, _from_timeline=True)
@@ -1241,26 +1227,28 @@ def _handle_quick_add(args, songs):
     if len(parts) != 2:
         print("Usage: + <song_number> <playlist_name>")
         return
-    
+
     try:
         song_num = int(parts[0])
     except ValueError:
         print("Invalid song number")
         return
-    
+
     playlist_name = parts[1].strip()
-    
+
     if not songs or song_num < 1 or song_num > len(songs):
         print(f"Invalid song number: {song_num}")
         return
-    
+
     song = songs[song_num - 1]
-    
+
     # Find or create playlist
     pl = playlists.get_playlist_by_name(playlist_name)
     if not pl:
-        confirm = input(f"Create new playlist '{playlist_name}'? (y/n): ").strip().lower()
-        if confirm == 'y':
+        confirm = (
+            input(f"Create new playlist '{playlist_name}'? (y/n): ").strip().lower()
+        )
+        if confirm == "y":
             try:
                 playlist_uid = playlists.create_playlist(playlist_name)
                 print(f"✓ Created playlist: {playlist_name}")
@@ -1272,7 +1260,7 @@ def _handle_quick_add(args, songs):
             return
     else:
         playlist_uid = pl["uid"]
-    
+
     # Add song
     playlists.add_to_playlist(playlist_uid, song["uid"])
     print(f"✓ Added '{song['title']}' to '{playlist_name}'")
@@ -1284,7 +1272,7 @@ def _handle_create_playlist():
     if not name:
         print("Cancelled (empty name)")
         return
-    
+
     try:
         playlists.create_playlist(name)
         print(f"✓ Created playlist: {name}")
@@ -1298,11 +1286,11 @@ def _handle_delete_playlist(num, all_playlists):
     if num < 1 or num > len(all_playlists):
         print(f"Invalid playlist number: {num}")
         return
-    
+
     pl = all_playlists[num - 1]
     confirm = input(f"\nDelete playlist '{pl['name']}'? (y/n): ").strip().lower()
-    
-    if confirm == 'y':
+
+    if confirm == "y":
         playlists.delete_playlist(pl["uid"])
         print(f"✓ Deleted playlist: {pl['name']}")
     else:
@@ -1314,15 +1302,15 @@ def _handle_rename_playlist(num, all_playlists):
     if num < 1 or num > len(all_playlists):
         print(f"Invalid playlist number: {num}")
         return
-    
+
     pl = all_playlists[num - 1]
     print(f"\nCurrent name: {pl['name']}")
     new_name = input("New name: ").strip()
-    
+
     if not new_name:
         print("Cancelled (empty name)")
         return
-    
+
     try:
         playlists.rename_playlist(pl["uid"], new_name)
         print(f"✓ Renamed to: {new_name}")
@@ -1336,14 +1324,14 @@ def _handle_duplicate_playlist(num, all_playlists):
     if num < 1 or num > len(all_playlists):
         print(f"Invalid playlist number: {num}")
         return
-    
+
     pl = all_playlists[num - 1]
     default_name = f"{pl['name']} (copy)"
     new_name = input(f"\nNew playlist name [{default_name}]: ").strip()
-    
+
     if not new_name:
         new_name = default_name
-    
+
     try:
         playlists.duplicate_playlist(pl["uid"], new_name)
         print(f"✓ Duplicated to: {new_name}")
@@ -1360,13 +1348,17 @@ def _handle_merge_playlists(src_num, dest_num, all_playlists):
     if dest_num < 1 or dest_num > len(all_playlists):
         print(f"Invalid destination playlist number: {dest_num}")
         return
-    
+
     src = all_playlists[src_num - 1]
     dest = all_playlists[dest_num - 1]
-    
-    confirm = input(f"\nAppend all songs from '{src['name']}' to '{dest['name']}'? (y/n): ").strip().lower()
-    
-    if confirm == 'y':
+
+    confirm = (
+        input(f"\nAppend all songs from '{src['name']}' to '{dest['name']}'? (y/n): ")
+        .strip()
+        .lower()
+    )
+
+    if confirm == "y":
         playlists.merge_playlists(src["uid"], dest["uid"])
         print(f"✓ Merged '{src['name']}' into '{dest['name']}'")
     else:
@@ -1376,11 +1368,11 @@ def _handle_merge_playlists(src_num, dest_num, all_playlists):
 def _handle_add_song_to_playlist(playlist_uid, song_num):
     """Add a song from library to playlist"""
     songs = song_metadata.get_songs_alphabetically()
-    
+
     if not songs or song_num < 1 or song_num > len(songs):
         print(f"Invalid song number: {song_num}")
         return
-    
+
     song = songs[song_num - 1]
     playlists.add_to_playlist(playlist_uid, song["uid"])
     print(f"✓ Added: {song['title']}")
@@ -1391,7 +1383,7 @@ def _handle_remove_from_playlist(playlist_uid, position, songs):
     if position < 1 or position > len(songs):
         print(f"Invalid position: {position}")
         return
-    
+
     song_item = songs[position - 1]
     playlists.remove_by_position(playlist_uid, position)
     print(f"✓ Removed: {song_item.get('title', 'Unknown')}")
@@ -1405,7 +1397,7 @@ def _handle_move_song(playlist_uid, from_pos, to_pos, songs):
     if to_pos < 1 or to_pos > len(songs):
         print(f"Invalid to position: {to_pos}")
         return
-    
+
     if playlists.move_song(playlist_uid, from_pos, to_pos):
         print(f"✓ Moved song from position {from_pos} to {to_pos}")
     else:
@@ -1416,10 +1408,10 @@ def _handle_move_song(playlist_uid, from_pos, to_pos, songs):
 def _handle_clear_playlist(playlist_uid, name):
     """Clear all songs from playlist"""
     confirm = input(f"\nRemove all songs from '{name}'? (y/n): ").strip().lower()
-    
-    if confirm == 'y':
+
+    if confirm == "y":
         playlists.clear_playlist(playlist_uid)
-        print(f"✓ Cleared playlist")
+        print("✓ Cleared playlist")
     else:
         print("Cancelled")
 

@@ -327,7 +327,7 @@ class TestQueryFunctions(TestPlaylists):
 
     def test_get_empty_playlists(self):
         """Test finding playlists with no songs"""
-        uid1 = playlists.create_playlist("Empty", db_path=self.db_path)
+        _ = playlists.create_playlist("Empty", db_path=self.db_path)
         uid2 = playlists.create_playlist("Not Empty", db_path=self.db_path)
         playlists.add_to_playlist(uid2, "song1234ABCD5678", self.db_path)
 

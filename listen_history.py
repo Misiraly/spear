@@ -86,13 +86,13 @@ def init_database(db_path=DB_PATH):
         # Create indexes for faster queries
         cursor.execute(
             """
-            CREATE INDEX IF NOT EXISTS idx_song_uid 
+            CREATE INDEX IF NOT EXISTS idx_song_uid
             ON listen_history(song_uid)
         """
         )
         cursor.execute(
             """
-            CREATE INDEX IF NOT EXISTS idx_listened_at 
+            CREATE INDEX IF NOT EXISTS idx_listened_at
             ON listen_history(listened_at)
         """
         )

@@ -101,6 +101,12 @@ def temp_output_dir():
         shutil.rmtree(temp_dir)
 
 
+def _read_csv_rows(path: str):
+    """Read a CSV file and return its rows as a list."""
+    with open(path, "r", encoding="utf-8") as f:
+        return list(csv.reader(f))
+
+
 def test_export_table_to_csv(temp_db, temp_output_dir, monkeypatch):
     """Test exporting a single table to CSV"""
     # Mock the DB_PATH
@@ -114,10 +120,7 @@ def test_export_table_to_csv(temp_db, temp_output_dir, monkeypatch):
     # Verify CSV file was created
     assert os.path.exists(output_path)
 
-    # Read and verify CSV contents
-    with open(output_path, "r", encoding="utf-8") as f:
-        reader = csv.reader(f)
-        rows = list(reader)
+    rows = _read_csv_rows(output_path)
 
     # Check header
     assert rows[0] == ["uid", "title", "url", "duration", "add_date", "path"]
@@ -142,10 +145,7 @@ def test_export_listen_history_to_csv(temp_db, temp_output_dir, monkeypatch):
     # Verify CSV file was created
     assert os.path.exists(output_path)
 
-    # Read and verify CSV contents
-    with open(output_path, "r", encoding="utf-8") as f:
-        reader = csv.reader(f)
-        rows = list(reader)
+    rows = _read_csv_rows(output_path)
 
     # Check header
     assert rows[0] == ["id", "song_uid", "listened_at"]

@@ -5,19 +5,11 @@ Main entry point for the application. Launches unified interactive menu.
 """
 
 import cli_menu
+import listen_history
+import playback_timeline
+import playlists
 import reader
 import song_metadata
-import playlists
-import playback_timeline
-import listen_history
-
-
-class Cabinet:
-    def __init__(self):
-        self.song = {}
-        self.timeline = []
-        self.pos = 0
-
 
 if __name__ == "__main__":
     # Ensure user_specs.yaml exists (prompts on first run)
@@ -28,6 +20,6 @@ if __name__ == "__main__":
     playlists.init_database()
     playback_timeline.init_database()
     listen_history.init_database()
-    
+
     # Launch interactive menu
     cli_menu.display_menu()
