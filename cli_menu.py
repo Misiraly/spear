@@ -152,7 +152,7 @@ def display_menu():
         cmd = user_input.lower()
 
         if cmd in ("q", "x"):
-            print("\nGoodbye!")
+            print("-" * cv.SCREEN_WIDTH)
             break
 
         if cmd == "l":
@@ -174,7 +174,7 @@ def _print_library(songs):
         songs: List of song dictionaries
     """
     width = cv.SCREEN_WIDTH
-    print("\n" + "=" * width)
+    print("=" * width)
     print("SPEAR MUSIC LIBRARY".center(width))
     print("=" * width)
 
@@ -217,11 +217,11 @@ def _print_library(songs):
 
     # Command strip
     print(
-        "\n[num] play | <text> search | shuffle | rand [N] | loop [num] | t | date | top".center(
+        "[ shuffle : rand <N> : loop <num> : t (timeline) : date : top : del/ren/re <num> ]".center(
             width
         )
     )
-    print("del/ren/re [num] | + [num] [pl] | p | l | r/h/q\n".center(width))
+    print("[ + <num> <pl> : p (playlists) : l (library) : r (replay) : h (help) : q (quit) ]".center(width))
 
 
 def _truncate_title(title, max_length):
@@ -636,7 +636,7 @@ def _display_search_results(query: str, results: list, alpha_songs: list) -> Non
     """
     alpha_index = {s["uid"]: i + 1 for i, s in enumerate(alpha_songs)}
     width = cv.SCREEN_WIDTH
-    print("\n" + "=" * width)
+    print("=" * width)
     print(f'SEARCH: "{query}"'.center(width))
     print("=" * width)
 
@@ -672,7 +672,7 @@ def _display_timeline():
     positions = sorted(pos for pos in by_pos if lo <= pos <= hi)
 
     width = cv.SCREEN_WIDTH
-    print("\n" + "=" * width)
+    print("=" * width)
     print("PLAYBACK TIMELINE".center(width))
     print("=" * width)
 
@@ -698,8 +698,6 @@ def _display_timeline():
 
         print(label)
 
-    print()
-
 
 def _display_by_date(songs, reverse=False):
     """Print all songs sorted by date added.
@@ -722,7 +720,7 @@ def _display_by_date(songs, reverse=False):
 
     direction = "oldest first" if reverse else "newest first"
     width = cv.SCREEN_WIDTH
-    print("\n" + "=" * width)
+    print("=" * width)
     print(f"SONGS BY DATE ADDED  ({direction})".center(width))
     print("=" * width)
 
@@ -793,7 +791,7 @@ def _display_by_play_count(songs, user_input):
     alpha_index = {s["uid"]: i + 1 for i, s in enumerate(songs)}
 
     width = cv.SCREEN_WIDTH
-    print("\n" + "=" * width)
+    print("=" * width)
     print(header.center(width))
     print("=" * width)
 
@@ -806,8 +804,6 @@ def _display_by_play_count(songs, user_input):
         count = entry["listen_count"]
         plays = "play" if count == 1 else "plays"
         print(f"  {idx:<4}  {title:<{width - 22}}  {count} {plays}")
-
-    print()
 
 
 # ============================================================================
@@ -873,7 +869,7 @@ def _handle_random_offer(user_input, songs):
     offered = random.sample(songs, n)
 
     width = cv.SCREEN_WIDTH
-    print("\n" + "=" * width)
+    print("=" * width)
     print("RANDOM SUGGESTIONS".center(width))
     print("=" * width)
     for i, s in enumerate(offered, 1):
@@ -1022,7 +1018,7 @@ def _playlist_menu():
 def _display_playlists(all_playlists):
     """Display all playlists with song counts"""
     width = cv.SCREEN_WIDTH
-    print("\n" + "=" * width)
+    print("=" * width)
     print("PLAYLISTS".center(width))
     print("=" * width)
 
@@ -1151,7 +1147,7 @@ def _playlist_detail_menu(playlist):
 def _display_playlist_songs(playlist, songs):
     """Display songs in a playlist"""
     width = cv.SCREEN_WIDTH
-    print("\n" + "=" * width)
+    print("=" * width)
     print(f"PLAYLIST: {playlist['name']}".center(width))
     print("=" * width)
 
