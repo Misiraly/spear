@@ -48,10 +48,19 @@ def init_database(db_path=DB_PATH):
             """
             CREATE TABLE IF NOT EXISTS playback_cursor (
                 id INTEGER PRIMARY KEY CHECK (id = 1),
-                position INTEGER NOT NULL
+                position INTEGER NOT NULL,
+                resume_ms INTEGER NOT NULL DEFAULT 0
             )
         """
         )
+
+        # Migrate: add resume_ms column if it doesn't exist (for existing databases)
+        try:
+            cursor.execute(
+                "ALTER TABLE playback_cursor ADD COLUMN resume_ms INTEGER NOT NULL DEFAULT 0"
+            )
+        except Exception:
+            pass  # Column already exists
 
         # Create index for position-based queries
         cursor.execute(
@@ -84,14 +93,34 @@ def get_cursor(db_path=DB_PATH):
 
 
 def _set_cursor(position, db_path=DB_PATH):
-    """Set the cursor position (internal use)"""
+    """Set the cursor position (internal use). Resets resume_ms to 0."""
     with _get_connection(db_path) as conn:
         cursor = conn.cursor()
         cursor.execute(
             """
-            UPDATE playback_cursor SET position = ? WHERE id = 1
+            UPDATE playback_cursor SET position = ?, resume_ms = 0 WHERE id = 1
         """,
             (position,),
+        )
+        conn.commit()
+
+
+def get_resume_ms(db_path=DB_PATH):
+    """Return the saved resume position (ms) for the current song, or 0."""
+    with _get_connection(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT resume_ms FROM playback_cursor WHERE id = 1")
+        row = cursor.fetchone()
+        return row[0] if row else 0
+
+
+def set_resume_ms(ms, db_path=DB_PATH):
+    """Save a resume position (ms) for the current cursor song."""
+    with _get_connection(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE playback_cursor SET resume_ms = ? WHERE id = 1",
+            (int(ms),),
         )
         conn.commit()
 

@@ -2,3 +2,7 @@
 # user_specs.yaml is gitignored — your local settings stay private.
 
 library: "/path/to/your/music/library"
+
+# Next-song mode: how to pick the next song after one ends (or after a playlist).
+# Options: random | alpha (alphabetical) | history (forward) | history_r (backward)
+next_song_mode: random

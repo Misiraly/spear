@@ -15,6 +15,7 @@ import listen_history
 import play_song
 import playback_timeline
 import playlists
+import reader
 import search
 import song_metadata
 import youtube_integration
@@ -121,6 +122,7 @@ def _dispatch_command(user_input, songs):
         ("loop ", lambda arg: _handle_loop(user_input, songs), True),
         ("rand ", lambda arg: _handle_random_offer(user_input, songs), True),
         ("top ", lambda arg: _display_by_play_count(songs, user_input), False),
+        ("mode ", lambda arg: _handle_mode_command(arg), False),
     ]
     for prefix, handler, refresh in prefix_handlers:
         if cmd.startswith(prefix):
@@ -136,6 +138,38 @@ def _dispatch_command(user_input, songs):
     return _handle_input_fallback(user_input, songs)
 
 
+def _print_current_song_status():
+    """Print a one-line current/up-next status above the prompt."""
+    current_uid = playback_timeline.get_current_song()
+    if not current_uid:
+        return
+    song = song_metadata.get_song(current_uid)
+    if not song:
+        return
+    resume_ms = playback_timeline.get_resume_ms()
+    title = _truncate_title(song.get("title", "Unknown"), cv.SCREEN_WIDTH - 32)
+    dur_str = _format_duration(song.get("duration", 0))
+    if resume_ms > 0:
+        pos_str = _format_duration(resume_ms // 1000)
+        print(f"  \u266a {title}  [{pos_str} / {dur_str}]  \u2014 Enter to resume")
+    else:
+        print(f"  \u266a {title}  [{dur_str}]  \u2014 Enter to play")
+
+
+def _handle_resume_current():
+    """Play (or resume) the current song from its saved position."""
+    current_uid = playback_timeline.get_current_song()
+    if not current_uid:
+        print("\nNo current song — play something first.")
+        return
+    song = song_metadata.get_song(current_uid)
+    if not song:
+        print("\nCurrent song not found in library.")
+        return
+    resume_ms = playback_timeline.get_resume_ms()
+    _play_song(song, _from_timeline=True, _start_ms=resume_ms)
+
+
 def display_menu():
     """Display interactive menu with two-column song list and unified input handling.
 
@@ -148,8 +182,16 @@ def display_menu():
     _print_library(songs)
 
     while True:
+        _print_current_song_status()
         user_input = input("> ").strip()
         cmd = user_input.lower()
+
+        # Empty Enter → resume / play the current song
+        if not user_input:
+            _handle_resume_current()
+            songs = song_metadata.get_songs_alphabetically()
+            _print_library(songs)
+            continue
 
         if cmd in ("q", "x"):
             print("-" * cv.SCREEN_WIDTH)
@@ -332,7 +374,7 @@ def _handle_playlist_download(url):
         print("\nPlaylist download cancelled")
 
 
-def _play_song(song, _from_timeline=False):
+def _play_song(song, _from_timeline=False, _single_nav=False, _start_ms=0, _in_playlist=False):
     """Play the selected song, following G/H navigation chains.
 
     Args:
@@ -340,6 +382,14 @@ def _play_song(song, _from_timeline=False):
         _from_timeline: True when the song was pre-loaded into the timeline
                         (e.g. playlist mode) — skips re-appending to avoid
                         overwriting the queued future.
+        _single_nav: When True, return immediately after a single G/H press
+                     instead of chaining.  The pending song is NOT played;
+                     the caller is expected to handle it (e.g. to print a
+                     playlist counter before playing the next song).
+        _start_ms: Start playback from this offset in milliseconds (0 = beginning).
+                   Only applied to the first song in a navigation chain.
+        _in_playlist: When True, suppresses auto-advance after natural song end —
+                      _play_playlist manages cursor advancement itself.
 
     Returns:
         bool: True if the user navigated away via G/H at any point.
@@ -368,19 +418,40 @@ def _play_song(song, _from_timeline=False):
         if uid and not _from_timeline:
             playback_timeline.append_song(uid)
 
-        play_song.play_song(full_path, song_uid=uid, title=title)
+        play_song.play_song(full_path, song_uid=uid, title=title, start_ms=_start_ms)
+        _start_ms = 0  # Only the first play in the chain gets the resume offset
 
         # Check whether the user pressed G or H to navigate to a different song
         pending_uid = play_song.get_pending_song()
         if not pending_uid:
+            # Playback ended without a navigation event — persist position.
+            _exit_reason = play_song.get_exit_reason()
+            if _exit_reason != "ended":
+                # Interrupted (Q / X) — save resume point
+                playback_timeline.set_resume_ms(play_song.get_last_position_ms())
+            elif not _in_playlist:
+                # Song finished naturally in standalone mode → advance current song
+                _pick_next_current()
             break
 
         pending = song_metadata.get_song(pending_uid)
         if not pending or not pending.get("path"):
+            # Navigation target vanished — save position and stop
+            _exit_reason = play_song.get_exit_reason()
+            if _exit_reason != "ended":
+                playback_timeline.set_resume_ms(play_song.get_last_position_ms())
             break
 
-        # G/H navigation — update for next iteration
+        # G/H navigation occurred — cursor already moved, resume_ms already reset
         navigated = True
+
+        # In single-nav mode, return immediately so the caller can
+        # print the playlist counter before the next song plays.
+        # Do NOT save position here: cursor has already moved to the new song.
+        if _single_nav:
+            break
+
+        # Chain: update for next iteration
         _from_timeline = True  # All subsequent songs come from the timeline
         full_path = song_metadata.resolve_path(pending["path"])
         uid = pending.get("uid")
@@ -463,6 +534,11 @@ PLAYBACK CONTROLS (while playing):
 
 OTHER COMMANDS:
   l                     Reprint the song library
+  mode r                Next-song mode: Random (default)
+  mode a                Next-song mode: Alphabetical
+  mode h                Next-song mode: History (forward in timeline)
+  mode hr               Next-song mode: History (reverse / backwards)
+  <Enter>               Resume current song (or play it from beginning)
   --update-ytdlp          Update yt-dlp and restart (only works when launched via run.bat)
   h or help             Show this help message
   q or x                Quit program
@@ -494,6 +570,38 @@ def _handle_stream(url):
     """
     print(f"\n▶ Streaming from: {url}\n")
     play_song.stream_from_url(url)
+
+
+def _handle_mode_command(arg):
+    """Handle the 'mode' command: switch the next-song selection mode.
+
+    Valid arguments: r/random, a/alpha, h/history, hr/history_r
+    """
+    mapping = {
+        "r": "random",
+        "random": "random",
+        "a": "alpha",
+        "alpha": "alpha",
+        "h": "history",
+        "history": "history",
+        "hr": "history_r",
+        "history_r": "history_r",
+    }
+    mode = mapping.get(arg.strip().lower())
+    if not mode:
+        print(
+            f"Unknown mode '{arg.strip()}'.  Use: "
+            "mode r (random) | a (alpha) | h (history) | hr (history reverse)"
+        )
+        return
+    reader.set_next_song_mode(mode)
+    labels = {
+        "random": "Random",
+        "alpha": "Alphabetical",
+        "history": "History (forward)",
+        "history_r": "History (reverse)",
+    }
+    print(f"✓ Next-song mode set to: {labels[mode]}")
 
 
 def _handle_replay():
@@ -809,6 +917,47 @@ def _display_by_play_count(songs, user_input):
 # ============================================================================
 # QUEUE / PLAYBACK HELPER FUNCTIONS
 # ============================================================================
+
+
+def _pick_next_alpha_song_uid():
+    """Return the UID of the next song alphabetically after the current one."""
+    current_uid = playback_timeline.get_current_song()
+    songs = song_metadata.get_songs_alphabetically()
+    if not songs:
+        return None
+    if not current_uid:
+        return songs[0].get("uid")
+    for i, s in enumerate(songs):
+        if s.get("uid") == current_uid:
+            return songs[(i + 1) % len(songs)].get("uid")
+    return songs[0].get("uid")  # Fallback
+
+
+def _pick_next_current():
+    """Pick the next current song based on the configured mode.
+
+    Appends the chosen song to the timeline and advances the cursor to it.
+    Called after a song ends naturally (standalone) or after a playlist finishes.
+    Returns the chosen song UID, or None if no songs are available.
+    """
+    mode = reader.get_next_song_mode()
+
+    if mode == "history":
+        uid = playback_timeline.skip_forward(shuffle=False)
+        return uid
+
+    if mode == "history_r":
+        uid = playback_timeline.skip_back()
+        return uid
+
+    if mode == "alpha":
+        uid = _pick_next_alpha_song_uid()
+    else:  # random (default)
+        uid = song_metadata.get_random_song()
+
+    if uid:
+        playback_timeline.append_song(uid)
+    return uid
 
 
 def _handle_adhoc_queue(tokens, songs):
@@ -1188,33 +1337,69 @@ def _play_playlist(songs, shuffle=False):
     if valid_uids:
         playback_timeline.append_song_list(valid_uids)
 
-    for i, song_item in enumerate(song_list):
+    # Record the timeline base so we can map cursor position → playlist index.
+    # append_song_list places song_list[0] at base+1, [1] at base+2, etc.
+    # The cursor is now at base+1 (first song).
+    timeline_base = playback_timeline.get_cursor() - 1
+
+    aborted = False
+    navigated_away = False
+    i = 0
+    while i < len(song_list):
+        song_item = song_list[i]
         song = song_metadata.get_song(song_item["uid"])
         if not song:
             print("Skipping: song not found in library")
             # Keep cursor in sync even for skipped entries
             if i < len(song_list) - 1:
                 playback_timeline.advance_cursor()
+            i += 1
             continue
 
         print(f"\n[{i + 1}/{len(song_list)}]")
         _last_played_uid = song["uid"]
-        # _play_song returns True if the user navigated away via G/H
-        navigated = _play_song(song, _from_timeline=True)
+        # _play_song returns True if the user navigated away via G/H.
+        # _single_nav ensures it returns after one press without playing
+        # the pending song, so the loop can print the counter first.
+        navigated = _play_song(song, _from_timeline=True, _single_nav=True, _in_playlist=True)
 
-        # G/H took manual control — yield completely; cursor already managed by timeline
         if navigated:
-            break
+            # G/H was used — figure out where the cursor landed and resume
+            # from there if it's still within the playlist range.
+            current_cursor = playback_timeline.get_cursor()
+            landed_index = current_cursor - timeline_base - 1
+
+            # Check for X/abort press during the navigation
+            if play_song.get_exit_reason() == "abort":
+                aborted = True
+                break
+
+            # Landed outside the playlist range — user navigated away entirely
+            if landed_index < 0 or landed_index >= len(song_list):
+                navigated_away = True
+                break
+
+            # Resume: play the song the user navigated to (cursor is already
+            # at its position, so no advance_cursor needed).
+            i = landed_index
+            continue
 
         exit_reason = play_song.get_exit_reason()
 
         # X = abort the entire queue
         if exit_reason == "abort":
+            aborted = True
             break
 
         # Q ("skip") or natural end — advance cursor and continue to next song
         if i < len(song_list) - 1:
             playback_timeline.advance_cursor()
+        i += 1
+
+    # After the playlist finishes normally (not aborted, not navigated away),
+    # pick the next current song so the menu shows what's up next.
+    if not aborted and not navigated_away:
+        _pick_next_current()
 
 
 def _handle_quick_add(args, songs):

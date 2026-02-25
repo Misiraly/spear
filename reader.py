@@ -39,3 +39,17 @@ def load_user_specs():
 def get_music_library_path():
     user_specs = load_user_specs()
     return user_specs.get("library", "")
+
+
+def get_next_song_mode() -> str:
+    """Return the configured next-song mode: 'random', 'alpha', 'history', or 'history_r'."""
+    user_specs = load_user_specs()
+    return user_specs.get("next_song_mode", "random")
+
+
+def set_next_song_mode(mode: str) -> None:
+    """Persist the next-song mode to user_specs.yaml."""
+    user_specs = load_user_specs()
+    user_specs["next_song_mode"] = mode
+    with open(USER_SPECS_DATA, "w", encoding="utf-8") as f:
+        yaml.dump(user_specs, f, default_flow_style=False, allow_unicode=True)

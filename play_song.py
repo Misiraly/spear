@@ -38,6 +38,7 @@ class MusicPlayer:
         self.total_played_time = 0  # Track cumulative playback time
         self.last_duration = 0  # Store duration for display when stopped
         self.listen_log_count = 0  # Track how many times we've logged this song
+        self.last_position_ms = 0  # Position (ms) captured when playback exits
 
     def play(
         self,
@@ -45,6 +46,7 @@ class MusicPlayer:
         song_uid: Optional[str] = None,
         title: Optional[str] = None,
         loop_mode: bool = False,
+        start_ms: int = 0,
     ):
         """Play a song from local file or URL
 
@@ -53,6 +55,7 @@ class MusicPlayer:
             song_uid: Optional song UID for listen history logging
             title: Optional song title for display
             loop_mode: When True, restart song automatically on natural end
+            start_ms: Start playback from this position in milliseconds (0 = from beginning)
         """
         self.current_song_uid = song_uid
         self.should_exit = False
@@ -75,6 +78,10 @@ class MusicPlayer:
 
         # Wait for media to parse
         time.sleep(0.5)
+
+        # Seek to resume position if provided
+        if start_ms > 0:
+            self.player.set_time(start_ms)
 
         # Get title if not provided
         if title is None:
@@ -127,6 +134,12 @@ class MusicPlayer:
             self._update_progress()
 
             time.sleep(0.1)
+
+        # Capture playback position for resume (0 when song ended naturally)
+        if self.exit_reason in ("skip", "abort", "navigate"):
+            self.last_position_ms = self.player.get_time()
+        else:
+            self.last_position_ms = 0
 
         # Clean up
         self.player.stop()
@@ -411,6 +424,7 @@ def play_song(
     song_uid: Optional[str] = None,
     title: Optional[str] = None,
     loop_mode: bool = False,
+    start_ms: int = 0,
 ):
     """Play a song from local file
 
@@ -419,8 +433,9 @@ def play_song(
         song_uid: Optional song UID for listen history
         title: Optional song title for display
         loop_mode: When True, restart song automatically on natural end
+        start_ms: Start playback from this position in milliseconds (0 = from beginning)
     """
-    _player.play(path, song_uid, title, loop_mode)
+    _player.play(path, song_uid, title, loop_mode, start_ms=start_ms)
 
 
 def get_pending_song() -> Optional[str]:
@@ -445,6 +460,15 @@ def get_exit_reason() -> str:
         "navigate" User pressed G/H (navigated via timeline)
     """
     return _player.exit_reason
+
+
+def get_last_position_ms() -> int:
+    """Return the playback position (ms) captured when the last song exited.
+
+    Non-zero when the user interrupted playback (Q/X/navigate).  Zero when
+    the song ended naturally.  Use this to save a resume point.
+    """
+    return _player.last_position_ms
 
 
 def stream_from_url(url: str):
