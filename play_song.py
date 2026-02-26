@@ -5,12 +5,18 @@ This module provides playback functionality for local files and streaming
 from URLs, with real-time keyboard controls and a visual progress bar.
 """
 
-import msvcrt
 import os
 import subprocess
 import sys
 import threading
 import time
+
+if sys.platform == "win32":
+    import msvcrt
+else:
+    import select
+    import termios
+    import tty
 from typing import Optional
 
 import vlc  # type: ignore[import-untyped]
@@ -100,12 +106,12 @@ class MusicPlayer:
         Args:
             title: Song title to display
         """
-        # Start keyboard listener thread
+        # Display UI before starting raw mode keyboard listener
+        self._display_header(title)
+
+        # Start keyboard listener thread (sets tty.setraw — must be after header display)
         keyboard_thread = threading.Thread(target=self._keyboard_listener, daemon=True)
         keyboard_thread.start()
-
-        # Display UI
-        self._display_header(title)
 
         # Main playback loop
         while not self.should_exit:
@@ -121,9 +127,10 @@ class MusicPlayer:
                     self.player.play()
                     self.is_playing = True
                     self.start_time = time.time()
-                    print(
-                        f"\n{'[Loop ' + str(self.loop_count + 1) + ']':^{cv.SCREEN_WIDTH}}"
+                    sys.stdout.write(
+                        f"\r\n{'[Loop ' + str(self.loop_count + 1) + ']':^{cv.SCREEN_WIDTH}}\r\n"
                     )
+                    sys.stdout.flush()
                     continue
                 break
 
@@ -140,10 +147,14 @@ class MusicPlayer:
             self.last_position_ms = self.player.get_time()
         else:
             self.last_position_ms = 0
+        # Signal keyboard thread to exit and wait for it to restore terminal settings
+        self.should_exit = True
+        keyboard_thread.join(timeout=0.5)
 
         # Clean up
         self.player.stop()
-        print("\n")  # Move to new line after progress bar
+        sys.stdout.write("\r\n")  # Move to new line after progress bar
+        sys.stdout.flush()
 
     def _display_header(self, title: str):
         """Display centered song title and controls
@@ -307,19 +318,37 @@ class MusicPlayer:
             b"X": "abort",
         }
 
-        while not self.should_exit:
-            if msvcrt.kbhit():
-                char = msvcrt.getch()
+        if sys.platform == "win32":
+            while not self.should_exit:
+                if msvcrt.kbhit():
+                    char = msvcrt.getch()
+                    if char in key_actions:
+                        key_actions[char]()
+                    elif char in exit_keys:
+                        self.exit_reason = exit_keys[char]
+                        self.should_exit = True
+                    elif char.isdigit():  # Jump to decile
+                        self._jump_to_percent(int(char) * 10)
+                time.sleep(0.01)
+        else:
+            fd = sys.stdin.fileno()
+            old_settings = termios.tcgetattr(fd)
+            try:
+                tty.setraw(fd)
+                while not self.should_exit:
+                    if select.select([sys.stdin], [], [], 0.01)[0]:
+                        char = sys.stdin.read(1)
+                        char_bytes = char.encode()
 
-                if char in key_actions:
-                    key_actions[char]()
-                elif char in exit_keys:
-                    self.exit_reason = exit_keys[char]
-                    self.should_exit = True
-                elif char.isdigit():  # Jump to decile
-                    self._jump_to_percent(int(char) * 10)
-
-            time.sleep(0.01)
+                        if char_bytes in key_actions:
+                            key_actions[char_bytes]()
+                        elif char_bytes in exit_keys:
+                            self.exit_reason = exit_keys[char_bytes]
+                            self.should_exit = True
+                        elif char.isdigit():  # Jump to decile
+                            self._jump_to_percent(int(char) * 10)
+            finally:
+                termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
 
     def _toggle_play_pause(self):
         """Toggle between play and pause"""
@@ -394,13 +423,8 @@ class MusicPlayer:
         Args:
             percent: Percentage (0-100)
         """
-        duration = self.player.get_length()
-        if duration > 0:
-            new_time = int(duration * percent / 100)
-            # Ensure we don't seek past the end (leave 1 second buffer)
-            max_time = duration - 1000  # 1 second before end
-            new_time = min(new_time, max_time)
-            self.player.set_time(new_time)
+        clamped = min(percent / 100.0, 0.95)
+        self.player.set_position(clamped)
 
     def _on_song_end(self):
         """Handle song ending naturally"""
@@ -482,7 +506,7 @@ def stream_from_url(url: str):
     # Use yt-dlp to get the direct stream URL
     try:
         result = subprocess.run(
-            ["yt-dlp", "-f", "bestaudio", "--get-url", url],
+            [*cv.YT_DLP_CMD, "-f", "bestaudio", "--get-url", url],
             capture_output=True,
             text=True,
             check=True,
@@ -491,7 +515,7 @@ def stream_from_url(url: str):
 
         # Get title for display
         title_result = subprocess.run(
-            ["yt-dlp", "--get-title", url],
+            [*cv.YT_DLP_CMD, "--get-title", url],
             capture_output=True,
             text=True,
             check=True,

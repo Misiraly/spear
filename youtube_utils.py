@@ -11,6 +11,7 @@ import re
 import subprocess
 from typing import Dict, Optional
 
+import constants as cv
 import song_metadata
 
 # YouTube URL patterns
@@ -144,7 +145,7 @@ def get_video_metadata(url: str) -> Optional[Dict]:
     """
     try:
         result = subprocess.run(
-            ["yt-dlp", "--dump-json", "--no-playlist", url],
+            [*cv.YT_DLP_CMD, "--dump-json", "--no-playlist", url],
             capture_output=True,
             text=True,
             check=True,
@@ -177,7 +178,7 @@ def get_playlist_metadata(url: str) -> Optional[Dict]:
     """
     try:
         result = subprocess.run(
-            ["yt-dlp", "--dump-json", "--flat-playlist", url],
+            [*cv.YT_DLP_CMD, "--dump-json", "--flat-playlist", url],
             capture_output=True,
             text=True,
             check=True,

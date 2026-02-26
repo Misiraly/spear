@@ -10,6 +10,7 @@ import os
 import subprocess
 from typing import Dict, Optional
 
+import constants as cv
 import reader
 import song_metadata
 import youtube_utils
@@ -26,7 +27,7 @@ def _get_file_duration(file_path: str) -> Optional[int]:
     """
     try:
         result = subprocess.run(
-            ["yt-dlp", "--dump-json", file_path],
+            [*cv.YT_DLP_CMD, "--dump-json", file_path],
             capture_output=True,
             text=True,
             check=True,
@@ -71,7 +72,7 @@ def download_video(url: str, output_path: Optional[str] = None) -> Optional[Dict
     try:
         subprocess.run(
             [
-                "yt-dlp",
+                *cv.YT_DLP_CMD,
                 "-x",  # Extract audio
                 "--audio-format",
                 "vorbis",  # Convert to .ogg

@@ -1,73 +1,78 @@
-#!/bin/bash
+#!/usr/bin/env bash
+
 # ── Spear launcher ───────────────────────────────────────────────────────────
 # Activates the project venv and runs the app.
 # Exit code 100 = update yt-dlp, then restart automatically.
 #
 # Venv resolution order:
-#   1. SPEAR_VENV environment variable (set this on machines with a global venv)
-#   2. .venv/ folder in the repo root (standard, works on a fresh clone)
+#   1. SPEAR_VENV environment variable
+#   2. .venv/ folder in the repo root
 
-# Change to script directory
-cd "$(dirname "$0")" || exit 1
+set -e
+
+# Change to script directory (equivalent to cd /d "%~dp0")
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
 
 # ── Locate venv ──────────────────────────────────────────────────────────────
-if [ -n "$SPEAR_VENV" ]; then
-    if [ ! -f "$SPEAR_VENV/bin/activate" ]; then
-        echo "ERROR: SPEAR_VENV is set but '$SPEAR_VENV/bin/activate' was not found."
-        read -p "Press Enter to exit..." -r
+activate_venv() {
+    # shellcheck disable=SC1090
+    source "$1/bin/activate"
+}
+if [[ -n "$SPEAR_VENV" ]]; then
+    if [[ ! -f "$SPEAR_VENV/bin/activate" ]]; then
+        echo "ERROR: SPEAR_VENV is set but \"$SPEAR_VENV/bin/activate\" was not found."
         exit 1
     fi
-    source "$SPEAR_VENV/bin/activate"
-elif [ -f ".venv/bin/activate" ]; then
-    source ".venv/bin/activate"
+    activate_venv "$SPEAR_VENV"
+
+elif [[ -f ".venv/bin/activate" ]]; then
+    activate_venv ".venv"
+
 else
     echo "No virtual environment found. Creating .venv..."
-    python3 -m venv .venv
-    if [ $? -ne 0 ]; then
+    python3 -m venv .venv || {
         echo "ERROR: Failed to create virtual environment."
         echo "Make sure Python is installed and on your PATH."
-        read -p "Press Enter to exit..." -r
         exit 1
-    fi
-    source ".venv/bin/activate"
+    }
+
+    activate_venv ".venv"
+
     echo "Installing dependencies..."
-    pip install -r requirements.txt
-    if [ $? -ne 0 ]; then
+    pip install -r requirements.txt || {
         echo "ERROR: Failed to install dependencies."
-        read -p "Press Enter to exit..." -r
         exit 1
-    fi
+    }
+
     echo
     echo "Environment ready."
     echo
 fi
 
 # ── Run loop ─────────────────────────────────────────────────────────────────
-run_script() {
+while true; do
     python main.py
-    local EC=$?
+    EC=$?
 
-    if [ $EC -eq 100 ]; then
+    if [[ $EC -eq 100 ]]; then
         echo
         echo "Updating yt-dlp..."
-        pip install -U yt-dlp
-        if [ $? -ne 0 ]; then
+        pip install -U yt-dlp || {
             echo
             echo "WARNING: yt-dlp update failed. Check your internet connection."
-            read -p "Press Enter to exit..." -r
             exit 1
-        fi
+        }
         echo
         echo "yt-dlp updated. Restarting Spear..."
         echo
-        run_script  # Recursive call to restart
-    elif [ $EC -ne 0 ]; then
+        continue
+    fi
+
+    if [[ $EC -ne 0 ]]; then
         echo
         echo "Spear exited with error code $EC."
-        read -p "Press Enter to exit..." -r
     fi
 
     exit $EC
-}
-
-run_script
+done
