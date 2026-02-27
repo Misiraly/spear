@@ -151,9 +151,9 @@ def _print_current_song_status():
     dur_str = _format_duration(song.get("duration", 0))
     if resume_ms > 0:
         pos_str = _format_duration(resume_ms // 1000)
-        print(f"  \u266a {title}  [{pos_str} / {dur_str}]  \u2014 Enter to resume")
+        print(f"\u266a {title}  [{pos_str} / {dur_str}]  \u2014 Enter to resume")
     else:
-        print(f"  \u266a {title}  [{dur_str}]  \u2014 Enter to play")
+        print(f"\u266a {title}  [{dur_str}]  \u2014 Enter to play")
 
 
 def _handle_resume_current():
