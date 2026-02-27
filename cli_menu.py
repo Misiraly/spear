@@ -738,7 +738,7 @@ def _display_search_results(query: str, results: list, alpha_songs: list) -> Non
 
     # Rank markers: best match (last printed) gets the densest symbol.
     # Top 5 results are marked; the rest get a plain space.
-    _RANK_MARKERS = ("@", "#", "*", "+", "-")
+    _RANK_MARKERS = ("█", "▓", "▒", "░")
     total = len(results)
 
     for rank, song in enumerate(reversed(results)):
@@ -747,7 +747,7 @@ def _display_search_results(query: str, results: list, alpha_songs: list) -> Non
         if distance_from_best < len(_RANK_MARKERS):
             marker = _RANK_MARKERS[distance_from_best]
         else:
-            marker = " "
+            marker = "░"
 
         uid = song["uid"]
         idx = alpha_index.get(uid, "?")
