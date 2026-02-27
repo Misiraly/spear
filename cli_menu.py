@@ -753,12 +753,24 @@ def _display_search_results(query: str, results: list, alpha_songs: list) -> Non
         print()
         return
 
-    for song in reversed(results):
+    # Rank markers: best match (last printed) gets the densest symbol.
+    # Top 5 results are marked; the rest get a plain space.
+    _RANK_MARKERS = ("@", "#", "*", "+", "~")
+    total = len(results)
+
+    for rank, song in enumerate(reversed(results)):
+        # rank 0 = worst displayed (top of output), rank total-1 = best (bottom)
+        distance_from_best = total - 1 - rank
+        if distance_from_best < len(_RANK_MARKERS):
+            marker = _RANK_MARKERS[distance_from_best]
+        else:
+            marker = " "
+
         uid = song["uid"]
         idx = alpha_index.get(uid, "?")
         title = _truncate_title(song["title"], width - 16)
         duration = _format_duration(song.get("duration", 0))
-        print(f"  {idx:<4}  {title:<{width - 16}} {duration:>5}")
+        print(f"{marker} {idx:<4}  {title:<{width - 16}} {duration:>5}")
 
     print()
 
