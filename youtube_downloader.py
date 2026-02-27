@@ -147,7 +147,7 @@ def download_playlist(url: str, output_path: Optional[str] = None) -> Optional[D
         print(f"[{i}/{len(video_urls)}] Downloading {video_url}...")
 
         # Check for duplicates before downloading
-        if youtube_utils.is_duplicate(video_url):
+        if song_metadata.get_song_by_url(video_url):
             print("  ⚠ URL already in database, skipping")
             continue
 
@@ -185,7 +185,7 @@ def check_duplicate_before_download(url: str) -> Optional[str]:
              None if no duplicate
     """
     # Check if URL already in database
-    existing_song = youtube_utils.get_song_by_url(url)
+    existing_song = song_metadata.get_song_by_url(url)
 
     if existing_song:
         # URL is tracked in database

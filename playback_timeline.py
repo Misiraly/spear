@@ -20,7 +20,7 @@ from db_utils import validate_uid as _validate_uid
 from song_metadata import get_song as _get_song
 
 # Constants
-DB_PATH = os.path.join(os.path.dirname(__file__), cv.DB_PATH)
+DB_PATH = cv.DB_PATH
 MAX_PAST_ENTRIES = 100
 
 

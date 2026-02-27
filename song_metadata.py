@@ -16,7 +16,7 @@ from db_utils import row_to_song_dict_with_count as _row_to_song_dict_with_count
 from db_utils import validate_uid as _validate_uid
 
 # Constants
-DB_PATH = os.path.join(os.path.dirname(__file__), cv.DB_PATH)
+DB_PATH = cv.DB_PATH
 
 
 def resolve_path(filename):
@@ -156,6 +156,21 @@ def get_song(uid, db_path=DB_PATH):
             FROM songs WHERE uid = ?
         """,
             (uid,),
+        )
+        row = cursor.fetchone()
+        return _row_to_song_dict(row) if row else None
+
+
+def get_song_by_url(url, db_path=DB_PATH):
+    """Get song metadata by URL, returns dict or None"""
+    with _get_connection(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT uid, title, url, duration, add_date, path, last_modified
+            FROM songs WHERE url = ?
+        """,
+            (url,),
         )
         row = cursor.fetchone()
         return _row_to_song_dict(row) if row else None

@@ -148,9 +148,9 @@ def _print_current_song_status():
         return
     resume_ms = playback_timeline.get_resume_ms()
     title = _truncate_title(song.get("title", "Unknown"), cv.SCREEN_WIDTH - 32)
-    dur_str = _format_duration(song.get("duration", 0))
+    dur_str = play_song.format_time(song.get("duration", 0))
     if resume_ms > 0:
-        pos_str = _format_duration(resume_ms // 1000)
+        pos_str = play_song.format_time(resume_ms // 1000)
         print(f"\u266a {title}  [{pos_str} / {dur_str}]  \u2014 Enter to resume")
     else:
         print(f"\u266a {title}  [{dur_str}]  \u2014 Enter to play")
@@ -237,19 +237,19 @@ def _print_library(songs):
         left_song = songs[left_idx]
         left_num = left_idx + 1
         title_w = (
-            col_width - 11
-        )  # 4 (num) + 1 (sp) + title + 1 (sp) + 5 (dur) = col_width
+            col_width - 13
+        )  # 4 (num) + 1 (sp) + title + 1 (sp) + 7 (dur) = col_width
         left_title = _truncate_title(left_song["title"], title_w)
-        left_duration = _format_duration(left_song.get("duration", 0))
-        left_text = f"{left_num:<4} {left_title:<{title_w}} {left_duration:>5}"
+        left_duration = play_song.format_time(left_song.get("duration", 0))
+        left_text = f"{left_num:<4} {left_title:<{title_w}} {left_duration:>7}"
 
         # Right column (if exists)
         if right_idx < len(songs):
             right_song = songs[right_idx]
             right_num = right_idx + 1
             right_title = _truncate_title(right_song["title"], title_w)
-            right_duration = _format_duration(right_song.get("duration", 0))
-            right_text = f"{right_num:<4} {right_title:<{title_w}} {right_duration:>5}"
+            right_duration = play_song.format_time(right_song.get("duration", 0))
+            right_text = f"{right_num:<4} {right_title:<{title_w}} {right_duration:>7}"
 
             # Print both columns
             print(f"{left_text}  {right_text}")
@@ -279,23 +279,6 @@ def _truncate_title(title, max_length):
     if len(title) <= max_length:
         return title
     return title[: max_length - 3] + "..."
-
-
-def _format_duration(seconds):
-    """Format duration in seconds as MM:SS
-
-    Args:
-        seconds: Duration in seconds
-
-    Returns:
-        str: Formatted duration string
-    """
-    if seconds <= 0:
-        return "0:00"
-
-    minutes = seconds // 60
-    secs = seconds % 60
-    return f"{minutes}:{secs:02d}"
 
 
 def _handle_song_selection(user_input, songs):
@@ -768,9 +751,9 @@ def _display_search_results(query: str, results: list, alpha_songs: list) -> Non
 
         uid = song["uid"]
         idx = alpha_index.get(uid, "?")
-        title = _truncate_title(song["title"], width - 16)
-        duration = _format_duration(song.get("duration", 0))
-        print(f"{marker} {idx:<4}  {title:<{width - 16}} {duration:>5}")
+        title = _truncate_title(song["title"], width - 17)
+        duration = play_song.format_time(song.get("duration", 0))
+        print(f"{marker} {idx:<4} {title:<{width - 17}} {duration:>7}")
 
     print()
 
@@ -801,9 +784,9 @@ def _display_timeline():
         song = song_metadata.get_song(uid)
 
         if song:
-            title = _truncate_title(song["title"], width - 20)
-            duration = _format_duration(song.get("duration", 0))
-            meta = f"{title} {duration:>5}"
+            title = _truncate_title(song["title"], width - 22)
+            duration = play_song.format_time(song.get("duration", 0))
+            meta = f"{title} {duration:>7}"
         else:
             meta = "[deleted]"
 
@@ -847,10 +830,10 @@ def _display_by_date(songs, reverse=False):
     for song in reversed(dated):
         uid = song["uid"]
         idx = alpha_index.get(uid, "?")
-        title = _truncate_title(song["title"], width - 28)
-        duration = _format_duration(song.get("duration", 0))
+        title = _truncate_title(song["title"], width - 30)
+        duration = play_song.format_time(song.get("duration", 0))
         add_date = song.get("add_date", "")[:10]  # YYYY-MM-DD
-        print(f"  {idx:<4}  {title:<{width - 28}} {duration:>5}  {add_date}")
+        print(f"  {idx:<4}  {title:<{width - 30}} {duration:>7}  {add_date}")
 
     print()
 
@@ -1034,9 +1017,9 @@ def _handle_random_offer(user_input, songs):
     print("RANDOM SUGGESTIONS".center(width))
     print("=" * width)
     for i, s in enumerate(offered, 1):
-        title = _truncate_title(s["title"], width - 15)
-        duration = _format_duration(s.get("duration", 0))
-        print(f"  {i:<3} {title:<{width - 15}} {duration:>5}")
+        title = _truncate_title(s["title"], width - 17)
+        duration = play_song.format_time(s.get("duration", 0))
+        print(f"  {i:<3} {title:<{width - 17}} {duration:>7}")
     print()
 
     choice_str = input("Pick a number to play, or Enter to go back: ").strip()
@@ -1320,14 +1303,14 @@ def _display_playlist_songs(playlist, songs):
     # Show songs with positions
     for song in songs:
         pos = song["position"]
-        title = _truncate_title(song.get("title") or "Unknown", width - 15)
-        duration = _format_duration(song.get("duration") or 0)
-        print(f"  {pos:<4} {title:<{width - 15}} {duration:>5}")
+        title = _truncate_title(song.get("title") or "Unknown", width - 17)
+        duration = play_song.format_time(song.get("duration") or 0)
+        print(f"  {pos:<4} {title:<{width - 17}} {duration:>7}")
 
     # Stats
     stats = playlists.get_playlist_stats(playlist["uid"])
     if stats:
-        total_dur = _format_duration(stats["total_duration"])
+        total_dur = play_song.format_time(stats["total_duration"])
         print(f"\n  Total: {stats['song_count']} songs, {total_dur}")
 
     print("\n[pos] play | play [shuffle] | add/rm [num] | mv [from] [to] | clear | q\n")

@@ -212,38 +212,6 @@ def get_playlist_metadata(url: str) -> Optional[Dict]:
         return None
 
 
-def is_duplicate(url: str) -> bool:
-    """Check if URL already exists in database
-
-    Args:
-        url: YouTube URL to check
-
-    Returns:
-        bool: True if URL already tracked in database
-    """
-    songs = song_metadata.get_all_songs()
-    for song in songs:
-        if song.get("url") == url:
-            return True
-    return False
-
-
-def get_song_by_url(url: str) -> Optional[Dict]:
-    """Get song from database by URL
-
-    Args:
-        url: YouTube URL
-
-    Returns:
-        dict: Song dictionary or None if not found
-    """
-    songs = song_metadata.get_all_songs()
-    for song in songs:
-        if song.get("url") == url:
-            return song
-    return None
-
-
 def path_exists(file_path: str) -> bool:
     """Check if file path exists on filesystem
 

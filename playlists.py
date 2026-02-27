@@ -18,7 +18,7 @@ from db_utils import row_to_playlist_item_dict as _row_to_playlist_item_dict
 from db_utils import validate_uid as _validate_uid
 
 # Constants
-DB_PATH = os.path.join(os.path.dirname(__file__), cv.DB_PATH)
+DB_PATH = cv.DB_PATH
 
 
 def init_database(db_path=DB_PATH):

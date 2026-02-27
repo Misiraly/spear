@@ -40,7 +40,7 @@ def download_and_add_video(url: str) -> Optional[str]:
 
     if action == "skip_url":
         print(f"⚠ URL already in database with existing file, skipping: {url}")
-        existing_song = youtube_utils.get_song_by_url(url)
+        existing_song = song_metadata.get_song_by_url(url)
         return existing_song["uid"] if existing_song else None
 
     elif action == "skip_path":
@@ -49,7 +49,7 @@ def download_and_add_video(url: str) -> Optional[str]:
 
     elif action == "update":
         print("📝 URL tracked but missing data, downloading to update...")
-        existing_song = youtube_utils.get_song_by_url(url)
+        existing_song = song_metadata.get_song_by_url(url)
         if not existing_song:
             return None
         uid = existing_song["uid"]
@@ -178,7 +178,7 @@ def add_existing_url_to_playlist(url: str, playlist_uid: str) -> bool:
         bool: True if successful
     """
     # Check if URL exists in database
-    existing_song = youtube_utils.get_song_by_url(url)
+    existing_song = song_metadata.get_song_by_url(url)
 
     if not existing_song:
         print(f"Error: URL not found in database: {url}")

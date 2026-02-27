@@ -7,7 +7,7 @@ from datetime import datetime
 
 import constants as cv
 
-DB_PATH = os.path.join(os.path.dirname(__file__), cv.DB_PATH)
+DB_PATH = cv.DB_PATH
 OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "data", "exports")
 
 

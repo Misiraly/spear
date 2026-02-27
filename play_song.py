@@ -26,6 +26,30 @@ import listen_history
 import playback_timeline
 
 
+def format_time(seconds: float) -> str:
+    """Format seconds as M:SS or H:MM:SS.
+
+    Values under 60 minutes use M:SS (e.g. 4:03).
+    Values 60 minutes or longer use H:MM:SS (e.g. 1:07:23).
+
+    Args:
+        seconds: Time in seconds (int or float).
+
+    Returns:
+        str: Formatted time string.
+    """
+    if seconds <= 0:
+        return "0:00"
+
+    hours = int(seconds // 3600)
+    minutes = int((seconds % 3600) // 60)
+    secs = int(seconds % 60)
+
+    if hours > 0:
+        return f"{hours}:{minutes:02d}:{secs:02d}"
+    return f"{minutes}:{secs:02d}"
+
+
 class MusicPlayer:
     """VLC-based music player with keyboard controls"""
 
@@ -264,8 +288,8 @@ class MusicPlayer:
         progress = min(position / duration, 1.0)
 
         # Format time with fixed width (M:SS format, pad to 4 chars)
-        pos_str = self._format_time(position)
-        dur_str = self._format_time(duration)
+        pos_str = format_time(position)
+        dur_str = format_time(duration)
 
         # Calculate bar width based on fixed total width
         # Total: icon(5) + pos_time(4) + bar + dur_time(4) = 80
@@ -281,18 +305,6 @@ class MusicPlayer:
         sys.stdout.write(f"\r{icon}{pos_str}{bar}{dur_str}\033[K")
         sys.stdout.flush()
 
-    def _format_time(self, seconds: float) -> str:
-        """Format seconds as M:SS with consistent width
-
-        Args:
-            seconds: Time in seconds
-
-        Returns:
-            str: Formatted time string (always 4 chars for times < 10 min)
-        """
-        minutes = int(seconds // 60)
-        secs = int(seconds % 60)
-        return f"{minutes}:{secs:02d}"
 
     def _keyboard_listener(self):
         """Listen for keyboard input in separate thread"""

@@ -6,7 +6,7 @@ from db_utils import get_connection as _get_connection
 from db_utils import validate_uid as _validate_uid
 
 # Constants
-DB_PATH = os.path.join(os.path.dirname(__file__), cv.DB_PATH)
+DB_PATH = cv.DB_PATH
 
 
 def _execute_aggregation_query(where_clause, params, limit, reverse, db_path):
