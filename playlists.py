@@ -6,6 +6,7 @@ stored in SQLite alongside the listen history.
 """
 
 import os
+import random
 from datetime import datetime
 
 import constants as cv
@@ -652,6 +653,49 @@ def move_song(playlist_uid, from_position, to_position, db_path=DB_PATH):
             UPDATE playlist_items SET position = ? WHERE id = ?
         """,
             (to_position, item_id),
+        )
+
+        _update_modified_time(playlist_uid, conn, db_path)
+        conn.commit()
+        return True
+
+
+def shuffle_playlist(playlist_uid, db_path=DB_PATH):
+    """Randomly shuffle all songs in a playlist"""
+    _validate_uid(playlist_uid, "playlist_uid")
+
+    with _get_connection(db_path) as conn:
+        cursor = conn.cursor()
+
+        cursor.execute(
+            """
+            SELECT id FROM playlist_items
+            WHERE playlist_uid = ?
+            ORDER BY position
+        """,
+            (playlist_uid,),
+        )
+        items = cursor.fetchall()
+
+        if len(items) < 2:
+            return True
+
+        positions = list(range(1, len(items) + 1))
+        random.shuffle(positions)
+
+        for (item_id,), pos in zip(items, positions):
+            cursor.execute(
+                "UPDATE playlist_items SET position = ? WHERE id = ?",
+                (-pos, item_id),
+            )
+
+        # Flip negative positions to positive (avoids UNIQUE conflicts)
+        cursor.execute(
+            """
+            UPDATE playlist_items SET position = -position
+            WHERE playlist_uid = ? AND position < 0
+        """,
+            (playlist_uid,),
         )
 
         _update_modified_time(playlist_uid, conn, db_path)
