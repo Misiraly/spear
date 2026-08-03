@@ -144,6 +144,34 @@ class TestGetSong(TestSongMetadata):
         song = song_metadata.get_song("songNONEABCD5678", self.db_path)
         self.assertIsNone(song)
 
+    def test_get_song_by_url_exists(self):
+        """Test getting an existing song by its URL"""
+        uid = "songURLSABCD5678"
+        url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+        song_metadata.add_song(
+            uid, "Url Test", "/path/url.mp3", url=url, db_path=self.db_path
+        )
+
+        song = song_metadata.get_song_by_url(url, self.db_path)
+        self.assertIsNotNone(song)
+        self.assertEqual(song["uid"], uid)
+        self.assertEqual(song["url"], url)
+
+    def test_get_song_by_url_not_found(self):
+        """Test getting song by unknown URL returns None"""
+        song = song_metadata.get_song_by_url(
+            "https://www.youtube.com/watch?v=missing1234", self.db_path
+        )
+        self.assertIsNone(song)
+
+    def test_get_song_by_url_ignores_songs_without_url(self):
+        """Test local-only songs (url is NULL) are not matched"""
+        song_metadata.add_song(
+            "songLOCLABCD5678", "Local Only", "/path/local.mp3", db_path=self.db_path
+        )
+
+        self.assertIsNone(song_metadata.get_song_by_url("", self.db_path))
+
     def test_get_all_songs_empty(self):
         """Test getting all songs from empty database"""
         songs = song_metadata.get_all_songs(self.db_path)

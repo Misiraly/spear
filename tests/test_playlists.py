@@ -4,6 +4,7 @@ import os
 import sqlite3
 import tempfile
 import unittest
+from unittest.mock import patch
 
 import playlists
 
@@ -286,6 +287,82 @@ class TestReordering(TestPlaylists):
         self.assertTrue(success)
         songs = playlists.get_playlist_songs(uid, self.db_path)
         self.assertEqual(songs[0]["uid"], "songC333CCCC3333")
+
+
+class TestShuffle(TestPlaylists):
+    """Tests for shuffling playlists"""
+
+    def _stored_positions(self, playlist_uid):
+        """Read raw position values for a playlist, ascending"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT position FROM playlist_items
+            WHERE playlist_uid = ? ORDER BY position
+        """,
+            (playlist_uid,),
+        )
+        positions = [row[0] for row in cursor.fetchall()]
+        conn.close()
+        return positions
+
+    def _make_playlist(self, count):
+        """Create a playlist holding `count` songs, return (uid, song_uids)"""
+        uid = playlists.create_playlist("Test", db_path=self.db_path)
+        song_uids = [f"song{i:04d}AAAA{i:04d}" for i in range(count)]
+        playlists.add_multiple_to_playlist(uid, song_uids, self.db_path)
+        return uid, song_uids
+
+    def test_shuffle_preserves_all_songs(self):
+        """Test shuffling keeps every song exactly once"""
+        uid, song_uids = self._make_playlist(10)
+
+        self.assertTrue(playlists.shuffle_playlist(uid, self.db_path))
+
+        songs = playlists.get_playlist_songs(uid, self.db_path)
+        self.assertEqual(len(songs), 10)
+        self.assertEqual({s["uid"] for s in songs}, set(song_uids))
+
+    def test_shuffle_leaves_contiguous_positions(self):
+        """Test positions stay 1..N after the negative-flip pass"""
+        uid, _ = self._make_playlist(10)
+
+        playlists.shuffle_playlist(uid, self.db_path)
+
+        self.assertEqual(self._stored_positions(uid), list(range(1, 11)))
+
+    def test_shuffle_reorders_songs(self):
+        """Test a known permutation is actually applied to the order"""
+        uid, song_uids = self._make_playlist(5)
+
+        # Reversing makes the outcome deterministic and provably reordered
+        with patch("playlists.random.shuffle", side_effect=lambda p: p.reverse()):
+            playlists.shuffle_playlist(uid, self.db_path)
+
+        songs = playlists.get_playlist_songs(uid, self.db_path)
+        self.assertEqual([s["uid"] for s in songs], list(reversed(song_uids)))
+
+    def test_shuffle_single_song(self):
+        """Test shuffling a one-song playlist is a no-op"""
+        uid, song_uids = self._make_playlist(1)
+
+        self.assertTrue(playlists.shuffle_playlist(uid, self.db_path))
+
+        songs = playlists.get_playlist_songs(uid, self.db_path)
+        self.assertEqual([s["uid"] for s in songs], song_uids)
+
+    def test_shuffle_empty_playlist(self):
+        """Test shuffling an empty playlist succeeds"""
+        uid = playlists.create_playlist("Empty", db_path=self.db_path)
+
+        self.assertTrue(playlists.shuffle_playlist(uid, self.db_path))
+        self.assertEqual(playlists.get_playlist_songs(uid, self.db_path), [])
+
+    def test_shuffle_invalid_uid(self):
+        """Test shuffling with a malformed UID raises ValueError"""
+        with self.assertRaises(ValueError):
+            playlists.shuffle_playlist("invalid", self.db_path)
 
 
 class TestQueryFunctions(TestPlaylists):
