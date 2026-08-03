@@ -1,5 +1,6 @@
 import os
 from datetime import datetime, timedelta
+from typing import Any, Optional
 
 import constants as cv
 from db_utils import get_connection as _get_connection
@@ -9,7 +10,13 @@ from db_utils import validate_uid as _validate_uid
 DB_PATH = cv.DB_PATH
 
 
-def _execute_aggregation_query(where_clause, params, limit, reverse, db_path):
+def _execute_aggregation_query(
+    where_clause: str,
+    params: tuple[Any, ...],
+    limit: Optional[int],
+    reverse: bool,
+    db_path: str,
+) -> list[dict[str, Any]]:
     """Execute aggregation query with song titles joined from songs table"""
     order = "ASC" if reverse else "DESC"
 
@@ -36,26 +43,26 @@ def _execute_aggregation_query(where_clause, params, limit, reverse, db_path):
         ]
 
 
-def _get_start_of_week():
+def _get_start_of_week() -> datetime:
     """Calculate start of current week (Monday at 00:00:00)"""
     now = datetime.now()
     start = now - timedelta(days=now.weekday())
     return start.replace(hour=0, minute=0, second=0, microsecond=0)
 
 
-def _get_start_of_month():
+def _get_start_of_month() -> datetime:
     """Calculate start of current month (1st day at 00:00:00)"""
     now = datetime.now()
     return now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
 
-def _get_start_of_year():
+def _get_start_of_year() -> datetime:
     """Calculate start of current year (Jan 1st at 00:00:00)"""
     now = datetime.now()
     return now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
 
 
-def init_database(db_path=DB_PATH):
+def init_database(db_path: str = DB_PATH) -> str:
     """Create database and tables if they don't exist"""
     # Ensure the data directory exists
     os.makedirs(os.path.dirname(db_path), exist_ok=True)
@@ -102,7 +109,7 @@ def init_database(db_path=DB_PATH):
     return db_path
 
 
-def log_listen(song_uid, db_path=DB_PATH):
+def log_listen(song_uid: str, db_path: str = DB_PATH) -> None:
     """Record that a song was just listened to"""
     _validate_uid(song_uid, "song_uid")
 
@@ -115,7 +122,12 @@ def log_listen(song_uid, db_path=DB_PATH):
         conn.commit()
 
 
-def get_top_songs_last_n_days(days, limit=None, reverse=False, db_path=DB_PATH):
+def get_top_songs_last_n_days(
+    days: int,
+    limit: Optional[int] = None,
+    reverse: bool = False,
+    db_path: str = DB_PATH,
+) -> list[dict[str, Any]]:
     """Get songs sorted by listen count in the last N days"""
     cutoff_date = datetime.now() - timedelta(days=days)
 
@@ -124,7 +136,9 @@ def get_top_songs_last_n_days(days, limit=None, reverse=False, db_path=DB_PATH):
     )
 
 
-def get_top_songs_this_week(limit=None, reverse=False, db_path=DB_PATH):
+def get_top_songs_this_week(
+    limit: Optional[int] = None, reverse: bool = False, db_path: str = DB_PATH
+) -> list[dict[str, Any]]:
     """Get songs sorted by listen count in current week (Monday-Sunday)"""
     start_of_week = _get_start_of_week()
 
@@ -137,7 +151,9 @@ def get_top_songs_this_week(limit=None, reverse=False, db_path=DB_PATH):
     )
 
 
-def get_top_songs_this_month(limit=None, reverse=False, db_path=DB_PATH):
+def get_top_songs_this_month(
+    limit: Optional[int] = None, reverse: bool = False, db_path: str = DB_PATH
+) -> list[dict[str, Any]]:
     """Get songs sorted by listen count in current month"""
     start_of_month = _get_start_of_month()
 
@@ -150,7 +166,9 @@ def get_top_songs_this_month(limit=None, reverse=False, db_path=DB_PATH):
     )
 
 
-def get_top_songs_this_year(limit=None, reverse=False, db_path=DB_PATH):
+def get_top_songs_this_year(
+    limit: Optional[int] = None, reverse: bool = False, db_path: str = DB_PATH
+) -> list[dict[str, Any]]:
     """Get songs sorted by listen count in current year"""
     start_of_year = _get_start_of_year()
 
@@ -163,18 +181,27 @@ def get_top_songs_this_year(limit=None, reverse=False, db_path=DB_PATH):
     )
 
 
-def get_top_songs_all_time(limit=None, reverse=False, db_path=DB_PATH):
+def get_top_songs_all_time(
+    limit: Optional[int] = None, reverse: bool = False, db_path: str = DB_PATH
+) -> list[dict[str, Any]]:
     """Get songs sorted by listen count for all time"""
     return _execute_aggregation_query("", (), limit, reverse, db_path)
 
 
-def get_top_songs_for_week(year, week, limit=None, reverse=False, db_path=DB_PATH):
+def get_top_songs_for_week(
+    year: int,
+    week: int,
+    limit: Optional[int] = None,
+    reverse: bool = False,
+    db_path: str = DB_PATH,
+) -> list[dict[str, Any]]:
     """Get songs sorted by listen count for a specific week"""
     if not (1 <= week <= 53):
         raise ValueError(f"Week must be between 1 and 53, got: {week}")
 
     return _execute_aggregation_query(
-        "WHERE strftime('%Y', lh.listened_at) = ? AND strftime('%W', lh.listened_at) = ?",
+        "WHERE strftime('%Y', lh.listened_at) = ? "
+        "AND strftime('%W', lh.listened_at) = ?",
         (str(year), f"{week:02d}"),
         limit,
         reverse,
@@ -182,13 +209,20 @@ def get_top_songs_for_week(year, week, limit=None, reverse=False, db_path=DB_PAT
     )
 
 
-def get_top_songs_for_month(year, month, limit=None, reverse=False, db_path=DB_PATH):
+def get_top_songs_for_month(
+    year: int,
+    month: int,
+    limit: Optional[int] = None,
+    reverse: bool = False,
+    db_path: str = DB_PATH,
+) -> list[dict[str, Any]]:
     """Get songs sorted by listen count for a specific month"""
     if not (1 <= month <= 12):
         raise ValueError(f"Month must be between 1 and 12, got: {month}")
 
     return _execute_aggregation_query(
-        "WHERE strftime('%Y', lh.listened_at) = ? AND strftime('%m', lh.listened_at) = ?",
+        "WHERE strftime('%Y', lh.listened_at) = ? "
+        "AND strftime('%m', lh.listened_at) = ?",
         (str(year), f"{month:02d}"),
         limit,
         reverse,
@@ -196,7 +230,12 @@ def get_top_songs_for_month(year, month, limit=None, reverse=False, db_path=DB_P
     )
 
 
-def get_top_songs_for_year(year, limit=None, reverse=False, db_path=DB_PATH):
+def get_top_songs_for_year(
+    year: int,
+    limit: Optional[int] = None,
+    reverse: bool = False,
+    db_path: str = DB_PATH,
+) -> list[dict[str, Any]]:
     """Get songs sorted by listen count for a specific year"""
     if not isinstance(year, int) or year < 1900 or year > 2100:
         raise ValueError(f"Invalid year: {year}")

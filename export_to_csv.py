@@ -11,7 +11,7 @@ DB_PATH = cv.DB_PATH
 OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "data", "exports")
 
 
-def export_table_to_csv(table_name, output_path):
+def export_table_to_csv(table_name: str, output_path: str) -> None:
     """Export a database table to CSV
 
     Args:
@@ -38,7 +38,7 @@ def export_table_to_csv(table_name, output_path):
     print(f"Exported {len(rows)} rows from {table_name} to {output_path}")
 
 
-def export_all_tables():
+def export_all_tables() -> None:
     """Export all tables to CSV files with timestamp"""
     # Create output directory if it doesn't exist
     os.makedirs(OUTPUT_DIR, exist_ok=True)

@@ -12,6 +12,7 @@ while listen history only records songs where >=70% of duration was played.
 import os
 import random
 from datetime import datetime
+from typing import Any, Optional
 
 import constants as cv
 from db_utils import get_connection as _get_connection
@@ -24,7 +25,7 @@ DB_PATH = cv.DB_PATH
 MAX_PAST_ENTRIES = 100
 
 
-def init_database(db_path=DB_PATH):
+def init_database(db_path: str = DB_PATH) -> str:
     """Create playback timeline tables if they don't exist"""
     os.makedirs(os.path.dirname(db_path), exist_ok=True)
 
@@ -54,10 +55,11 @@ def init_database(db_path=DB_PATH):
         """
         )
 
-        # Migrate: add resume_ms column if it doesn't exist (for existing databases)
+        # Migrate: add resume_ms column if it doesn't exist (existing databases)
         try:
             cursor.execute(
-                "ALTER TABLE playback_cursor ADD COLUMN resume_ms INTEGER NOT NULL DEFAULT 0"
+                "ALTER TABLE playback_cursor "
+                "ADD COLUMN resume_ms INTEGER NOT NULL DEFAULT 0"
             )
         except Exception:
             pass  # Column already exists
@@ -83,16 +85,16 @@ def init_database(db_path=DB_PATH):
     return db_path
 
 
-def get_cursor(db_path=DB_PATH):
+def get_cursor(db_path: str = DB_PATH) -> int:
     """Get the current cursor position"""
     with _get_connection(db_path) as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT position FROM playback_cursor WHERE id = 1")
         row = cursor.fetchone()
-        return row[0] if row else -1
+        return int(row[0]) if row else -1
 
 
-def _set_cursor(position, db_path=DB_PATH):
+def _set_cursor(position: int, db_path: str = DB_PATH) -> None:
     """Set the cursor position (internal use). Resets resume_ms to 0."""
     with _get_connection(db_path) as conn:
         cursor = conn.cursor()
@@ -105,16 +107,16 @@ def _set_cursor(position, db_path=DB_PATH):
         conn.commit()
 
 
-def get_resume_ms(db_path=DB_PATH):
+def get_resume_ms(db_path: str = DB_PATH) -> int:
     """Return the saved resume position (ms) for the current song, or 0."""
     with _get_connection(db_path) as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT resume_ms FROM playback_cursor WHERE id = 1")
         row = cursor.fetchone()
-        return row[0] if row else 0
+        return int(row[0]) if row else 0
 
 
-def set_resume_ms(ms, db_path=DB_PATH):
+def set_resume_ms(ms: int, db_path: str = DB_PATH) -> None:
     """Save a resume position (ms) for the current cursor song."""
     with _get_connection(db_path) as conn:
         cursor = conn.cursor()
@@ -125,7 +127,7 @@ def set_resume_ms(ms, db_path=DB_PATH):
         conn.commit()
 
 
-def get_current_song(db_path=DB_PATH):
+def get_current_song(db_path: str = DB_PATH) -> Optional[str]:
     """Get the song_uid at the current cursor position, or None if empty/invalid"""
     cursor_pos = get_cursor(db_path)
     if cursor_pos < 0:
@@ -141,10 +143,10 @@ def get_current_song(db_path=DB_PATH):
             (cursor_pos,),
         )
         row = cursor.fetchone()
-        return row[0] if row else None
+        return str(row[0]) if row else None
 
 
-def get_timeline(db_path=DB_PATH):
+def get_timeline(db_path: str = DB_PATH) -> list[dict[str, Any]]:
     """Get the full timeline as a list of dicts with position, song_uid, added_at"""
     with _get_connection(db_path) as conn:
         cursor = conn.cursor()
@@ -158,7 +160,7 @@ def get_timeline(db_path=DB_PATH):
         return [_row_to_timeline_dict(row) for row in cursor.fetchall()]
 
 
-def clear_timeline(db_path=DB_PATH):
+def clear_timeline(db_path: str = DB_PATH) -> None:
     """Delete all timeline entries and reset cursor to -1"""
     with _get_connection(db_path) as conn:
         cursor = conn.cursor()
@@ -167,7 +169,7 @@ def clear_timeline(db_path=DB_PATH):
         conn.commit()
 
 
-def skip_back(db_path=DB_PATH):
+def skip_back(db_path: str = DB_PATH) -> Optional[str]:
     """
     Skip to the previous song in the timeline.
 
@@ -194,13 +196,13 @@ def skip_back(db_path=DB_PATH):
 
             if row and _get_song(row[0], db_path) is not None:
                 _set_cursor(new_pos, db_path)
-                return row[0]
+                return str(row[0])
 
     # No valid song found
     return None
 
 
-def _shuffle_future(cursor_pos, db_path=DB_PATH):
+def _shuffle_future(cursor_pos: int, db_path: str = DB_PATH) -> None:
     """Shuffle all future timeline entries (positions > cursor_pos)"""
     with _get_connection(db_path) as conn:
         cursor = conn.cursor()
@@ -231,7 +233,7 @@ def _shuffle_future(cursor_pos, db_path=DB_PATH):
         conn.commit()
 
 
-def skip_forward(shuffle=False, db_path=DB_PATH):
+def skip_forward(shuffle: bool = False, db_path: str = DB_PATH) -> Optional[str]:
     """
     Skip to the next song in the timeline.
 
@@ -296,13 +298,13 @@ def skip_forward(shuffle=False, db_path=DB_PATH):
             pos, song_uid = row
             if _get_song(song_uid, db_path) is not None:
                 _set_cursor(pos, db_path)
-                return song_uid
+                return str(song_uid)
 
     # No valid songs in future
     return None
 
 
-def _delete_future(cursor_pos, db_path=DB_PATH):
+def _delete_future(cursor_pos: int, db_path: str = DB_PATH) -> None:
     """Delete all timeline entries with position > cursor_pos"""
     with _get_connection(db_path) as conn:
         cursor = conn.cursor()
@@ -315,7 +317,7 @@ def _delete_future(cursor_pos, db_path=DB_PATH):
         conn.commit()
 
 
-def _renumber_positions(db_path=DB_PATH):
+def _renumber_positions(db_path: str = DB_PATH) -> None:
     """Renumber all positions to be contiguous starting from 0, update cursor"""
     with _get_connection(db_path) as conn:
         cursor = conn.cursor()
@@ -372,7 +374,7 @@ def _renumber_positions(db_path=DB_PATH):
         conn.commit()
 
 
-def _prune_past(limit=MAX_PAST_ENTRIES, db_path=DB_PATH):
+def _prune_past(limit: int = MAX_PAST_ENTRIES, db_path: str = DB_PATH) -> None:
     """Delete oldest past entries if count exceeds limit, then renumber"""
     cursor_pos = get_cursor(db_path)
 
@@ -419,7 +421,7 @@ def _prune_past(limit=MAX_PAST_ENTRIES, db_path=DB_PATH):
     _renumber_positions(db_path)
 
 
-def append_song(song_uid, db_path=DB_PATH):
+def append_song(song_uid: str, db_path: str = DB_PATH) -> None:
     """
     Append a song to the timeline, replacing the future.
 
@@ -447,7 +449,7 @@ def append_song(song_uid, db_path=DB_PATH):
     _prune_past(MAX_PAST_ENTRIES, db_path)
 
 
-def append_song_list(song_uids, db_path=DB_PATH):
+def append_song_list(song_uids: list[str], db_path: str = DB_PATH) -> None:
     """
     Append a list of song UIDs to the timeline as a queue, replacing the future.
 
@@ -481,13 +483,16 @@ def append_song_list(song_uids, db_path=DB_PATH):
     _prune_past(MAX_PAST_ENTRIES, db_path)
 
 
-def advance_cursor(db_path=DB_PATH):
-    """Advance the cursor one position forward (used during sequential playlist playback)"""
+def advance_cursor(db_path: str = DB_PATH) -> None:
+    """Advance the cursor one position forward.
+
+    Used during sequential playlist playback.
+    """
     current = get_cursor(db_path)
     _set_cursor(current + 1, db_path)
 
 
-def append_playlist(playlist_uid, db_path=DB_PATH):
+def append_playlist(playlist_uid: str, db_path: str = DB_PATH) -> None:
     """
     Append all songs from a playlist to the timeline, replacing the future.
 

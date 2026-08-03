@@ -10,14 +10,16 @@ import re
 import secrets
 import sqlite3
 import string
+from collections.abc import Iterator
 from contextlib import contextmanager
+from typing import Any
 
 # Constants
 UID_PATTERN = re.compile(r"^[a-zA-Z0-9]{16}$")
 
 
 @contextmanager
-def get_connection(db_path):
+def get_connection(db_path: str) -> Iterator[sqlite3.Connection]:
     """Context manager for database connections with automatic rollback on error
 
     Args:
@@ -39,7 +41,7 @@ def get_connection(db_path):
         conn.close()
 
 
-def generate_uid():
+def generate_uid() -> str:
     """Generate a 16-character alphanumeric UID
 
     Returns:
@@ -49,7 +51,7 @@ def generate_uid():
     return "".join(secrets.choice(chars) for _ in range(16))
 
 
-def generate_uid_from_url(url):
+def generate_uid_from_url(url: str) -> str:
     """Generate deterministic 16-character alphanumeric UID from URL
 
     Uses SHA-256 hash of the URL, encoded to base62 (alphanumeric),
@@ -68,7 +70,7 @@ def generate_uid_from_url(url):
     chars = string.ascii_letters + string.digits
     hash_int = int.from_bytes(hash_bytes, byteorder="big")
 
-    result = []
+    result: list[str] = []
     while hash_int > 0 and len(result) < 16:
         hash_int, remainder = divmod(hash_int, 62)
         result.append(chars[remainder])
@@ -80,7 +82,7 @@ def generate_uid_from_url(url):
     return "".join(result[:16])
 
 
-def validate_uid(uid, uid_type="UID"):
+def validate_uid(uid: str, uid_type: str = "UID") -> None:
     """Validate UID format
 
     Args:
@@ -94,11 +96,12 @@ def validate_uid(uid, uid_type="UID"):
         raise ValueError(f"Invalid {uid_type} format: {uid}")
 
 
-def row_to_playlist_dict(row):
+def row_to_playlist_dict(row: tuple[Any, ...]) -> dict[str, Any]:
     """Convert database row to playlist dictionary
 
     Args:
-        row: Tuple from database query (uid, name, description, created_at, last_modified)
+        row: Tuple from database query
+            (uid, name, description, created_at, last_modified)
 
     Returns:
         dict: Playlist data dictionary
@@ -112,7 +115,7 @@ def row_to_playlist_dict(row):
     }
 
 
-def ensure_playlist_exists(cursor, playlist_uid):
+def ensure_playlist_exists(cursor: sqlite3.Cursor, playlist_uid: str) -> None:
     """Check if playlist exists, raise ValueError if not
 
     Args:
@@ -127,8 +130,11 @@ def ensure_playlist_exists(cursor, playlist_uid):
         raise ValueError(f"Playlist not found: {playlist_uid}")
 
 
-def row_to_song_dict(row):
-    """Convert song row to dict with fields: uid, title, url, duration, add_date, path, last_modified"""
+def row_to_song_dict(row: tuple[Any, ...]) -> dict[str, Any]:
+    """Convert song row to dict.
+
+    Fields: uid, title, url, duration, add_date, path, last_modified.
+    """
     return {
         "uid": row[0],
         "title": row[1],
@@ -140,7 +146,7 @@ def row_to_song_dict(row):
     }
 
 
-def row_to_song_dict_with_count(row):
+def row_to_song_dict_with_count(row: tuple[Any, ...]) -> dict[str, Any]:
     """Convert song row to dict including listen_count instead of last_modified"""
     return {
         "uid": row[0],
@@ -153,8 +159,11 @@ def row_to_song_dict_with_count(row):
     }
 
 
-def row_to_playlist_item_dict(row):
-    """Convert playlist item row to dict with fields: position, uid, title, duration, added_at"""
+def row_to_playlist_item_dict(row: tuple[Any, ...]) -> dict[str, Any]:
+    """Convert playlist item row to dict.
+
+    Fields: position, uid, title, duration, added_at.
+    """
     return {
         "position": row[0],
         "uid": row[1],
@@ -164,8 +173,11 @@ def row_to_playlist_item_dict(row):
     }
 
 
-def row_to_timeline_dict(row):
-    """Convert playback timeline row to dict with fields: position, song_uid, added_at"""
+def row_to_timeline_dict(row: tuple[Any, ...]) -> dict[str, Any]:
+    """Convert playback timeline row to dict.
+
+    Fields: position, song_uid, added_at.
+    """
     return {
         "position": row[0],
         "song_uid": row[1],
@@ -173,7 +185,7 @@ def row_to_timeline_dict(row):
     }
 
 
-def get_next_position(cursor, playlist_uid):
+def get_next_position(cursor: sqlite3.Cursor, playlist_uid: str) -> int:
     """Get next available position for playlist item"""
     cursor.execute(
         "SELECT MAX(position) FROM playlist_items WHERE playlist_uid = ?",

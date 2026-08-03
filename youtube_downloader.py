@@ -165,7 +165,8 @@ def download_playlist(url: str, output_path: Optional[str] = None) -> Optional[D
             print("  ✗ Download failed")
 
     print(
-        f"\nPlaylist download complete: {len(downloaded_songs)}/{len(video_urls)} songs downloaded"
+        f"\nPlaylist download complete: "
+        f"{len(downloaded_songs)}/{len(video_urls)} songs downloaded"
     )
 
     return {

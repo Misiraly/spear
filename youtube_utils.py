@@ -2,7 +2,7 @@
 Utility functions for YouTube URL handling and metadata extraction.
 
 This module provides URL validation, metadata extraction using yt-dlp,
-UID generation from URLs, duplicate checking, and filename sanitization.
+UID generation from URLs, and filename sanitization.
 """
 
 import json
@@ -12,7 +12,6 @@ import subprocess
 from typing import Dict, Optional
 
 import constants as cv
-import song_metadata
 
 # YouTube URL patterns
 VIDEO_URL_PATTERN = re.compile(

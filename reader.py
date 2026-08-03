@@ -1,4 +1,5 @@
 import os
+from typing import Any
 
 import yaml
 
@@ -7,7 +8,7 @@ import constants as cv
 USER_SPECS_DATA = cv.USER_SPECS_DATA
 
 
-def ensure_user_specs():
+def ensure_user_specs() -> None:
     """Ensure user_specs.yaml exists. Prompt to create it on first run."""
     if os.path.isfile(USER_SPECS_DATA):
         return
@@ -30,21 +31,24 @@ def ensure_user_specs():
     print()
 
 
-def load_user_specs():
+def load_user_specs() -> dict[str, Any]:
     with open(USER_SPECS_DATA, "r") as file:
-        user_specs = yaml.safe_load(file)
+        user_specs: dict[str, Any] = yaml.safe_load(file)
     return user_specs
 
 
-def get_music_library_path():
+def get_music_library_path() -> str:
     user_specs = load_user_specs()
-    return user_specs.get("library", "")
+    return str(user_specs.get("library", ""))
 
 
 def get_next_song_mode() -> str:
-    """Return the configured next-song mode: 'random', 'alpha', 'history', or 'history_r'."""
+    """Return the configured next-song mode.
+
+    One of: 'random', 'alpha', 'history', or 'history_r'.
+    """
     user_specs = load_user_specs()
-    return user_specs.get("next_song_mode", "random")
+    return str(user_specs.get("next_song_mode", "random"))
 
 
 def set_next_song_mode(mode: str) -> None:

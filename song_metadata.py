@@ -7,6 +7,7 @@ separate from the listen history tracking.
 
 import os
 from datetime import datetime
+from typing import Any, Optional
 
 import constants as cv
 import reader
@@ -19,7 +20,7 @@ from db_utils import validate_uid as _validate_uid
 DB_PATH = cv.DB_PATH
 
 
-def resolve_path(filename):
+def resolve_path(filename: Optional[str]) -> Optional[str]:
     """Resolve a song filename to its full absolute path.
 
     Joins the music library directory from user_specs.yaml with the
@@ -36,7 +37,7 @@ def resolve_path(filename):
     return os.path.join(reader.get_music_library_path(), filename)
 
 
-def init_database(db_path=DB_PATH):
+def init_database(db_path: str = DB_PATH) -> str:
     """Create the song metadata table if it doesn't exist"""
     os.makedirs(os.path.dirname(db_path), exist_ok=True)
 
@@ -79,7 +80,7 @@ def init_database(db_path=DB_PATH):
     return db_path
 
 
-def _migrate_paths_to_filenames(db_path):
+def _migrate_paths_to_filenames(db_path: str) -> None:
     """One-time migration: strip absolute directory prefixes from stored paths.
 
     Any path that contains a directory separator is reduced to its basename
@@ -101,7 +102,15 @@ def _migrate_paths_to_filenames(db_path):
             conn.commit()
 
 
-def add_song(uid, title, path, url=None, duration=None, add_date=None, db_path=DB_PATH):
+def add_song(
+    uid: str,
+    title: str,
+    path: str,
+    url: Optional[str] = None,
+    duration: Optional[int] = None,
+    add_date: Optional[str] = None,
+    db_path: str = DB_PATH,
+) -> str:
     """Add a new song to the database or update if it exists
 
     The *path* stored is always the bare filename (basename). Callers may
@@ -146,7 +155,7 @@ def add_song(uid, title, path, url=None, duration=None, add_date=None, db_path=D
     return uid
 
 
-def get_song(uid, db_path=DB_PATH):
+def get_song(uid: str, db_path: str = DB_PATH) -> Optional[dict[str, Any]]:
     """Get song metadata by UID, returns dict or None"""
     with _get_connection(db_path) as conn:
         cursor = conn.cursor()
@@ -161,7 +170,7 @@ def get_song(uid, db_path=DB_PATH):
         return _row_to_song_dict(row) if row else None
 
 
-def get_song_by_url(url, db_path=DB_PATH):
+def get_song_by_url(url: str, db_path: str = DB_PATH) -> Optional[dict[str, Any]]:
     """Get song metadata by URL, returns dict or None"""
     with _get_connection(db_path) as conn:
         cursor = conn.cursor()
@@ -176,7 +185,7 @@ def get_song_by_url(url, db_path=DB_PATH):
         return _row_to_song_dict(row) if row else None
 
 
-def get_all_songs(db_path=DB_PATH):
+def get_all_songs(db_path: str = DB_PATH) -> list[dict[str, Any]]:
     """Get all songs ordered by add_date DESC"""
     with _get_connection(db_path) as conn:
         cursor = conn.cursor()
@@ -190,7 +199,7 @@ def get_all_songs(db_path=DB_PATH):
         return [_row_to_song_dict(row) for row in cursor.fetchall()]
 
 
-def search_songs(query, db_path=DB_PATH):
+def search_songs(query: str, db_path: str = DB_PATH) -> list[dict[str, Any]]:
     """Search songs by title (LIKE query), returns list"""
     with _get_connection(db_path) as conn:
         cursor = conn.cursor()
@@ -206,7 +215,7 @@ def search_songs(query, db_path=DB_PATH):
         return [_row_to_song_dict(row) for row in cursor.fetchall()]
 
 
-def update_song_path(uid, new_path, db_path=DB_PATH):
+def update_song_path(uid: str, new_path: str, db_path: str = DB_PATH) -> None:
     """Update file path for a song"""
     with _get_connection(db_path) as conn:
         cursor = conn.cursor()
@@ -221,7 +230,7 @@ def update_song_path(uid, new_path, db_path=DB_PATH):
         conn.commit()
 
 
-def update_song_title(uid, new_title, db_path=DB_PATH):
+def update_song_title(uid: str, new_title: str, db_path: str = DB_PATH) -> None:
     """Update song title (database only, does not rename file)
 
     Args:
@@ -242,7 +251,7 @@ def update_song_title(uid, new_title, db_path=DB_PATH):
         conn.commit()
 
 
-def update_song_duration(uid, new_duration, db_path=DB_PATH):
+def update_song_duration(uid: str, new_duration: int, db_path: str = DB_PATH) -> None:
     """Update song duration
 
     Args:
@@ -263,7 +272,7 @@ def update_song_duration(uid, new_duration, db_path=DB_PATH):
         conn.commit()
 
 
-def delete_song(uid, db_path=DB_PATH):
+def delete_song(uid: str, db_path: str = DB_PATH) -> None:
     """Delete song by UID (does not delete listen history)"""
     with _get_connection(db_path) as conn:
         cursor = conn.cursor()
@@ -271,7 +280,9 @@ def delete_song(uid, db_path=DB_PATH):
         conn.commit()
 
 
-def get_songs_alphabetically(reverse=False, db_path=DB_PATH):
+def get_songs_alphabetically(
+    reverse: bool = False, db_path: str = DB_PATH
+) -> list[dict[str, Any]]:
     """Get all songs sorted alphabetically by title"""
     order = "DESC" if reverse else "ASC"
     with _get_connection(db_path) as conn:
@@ -286,7 +297,9 @@ def get_songs_alphabetically(reverse=False, db_path=DB_PATH):
         return [_row_to_song_dict(row) for row in cursor.fetchall()]
 
 
-def get_songs_with_listen_count(limit=None, db_path=DB_PATH):
+def get_songs_with_listen_count(
+    limit: Optional[int] = None, db_path: str = DB_PATH
+) -> list[dict[str, Any]]:
     """Get all songs with their total listen count"""
     with _get_connection(db_path) as conn:
         cursor = conn.cursor()
@@ -305,7 +318,7 @@ def get_songs_with_listen_count(limit=None, db_path=DB_PATH):
         return [_row_to_song_dict_with_count(row) for row in cursor.fetchall()]
 
 
-def get_random_song(db_path=DB_PATH):
+def get_random_song(db_path: str = DB_PATH) -> Optional[str]:
     """
     Get a random song_uid from the songs table.
 
@@ -321,4 +334,4 @@ def get_random_song(db_path=DB_PATH):
         """
         )
         row = cursor.fetchone()
-        return row[0] if row else None
+        return str(row[0]) if row else None

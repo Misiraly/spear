@@ -9,6 +9,8 @@ import os
 import random
 import re
 import sys
+from collections.abc import Callable
+from typing import Any, Optional
 
 import constants as cv
 import listen_history
@@ -22,10 +24,10 @@ import youtube_integration
 import youtube_utils
 
 # Track last played song for replay function
-_last_played_uid = None
+_last_played_uid: Optional[str] = None
 
 
-def _try_num_command(arg, name, handler):
+def _try_num_command(arg: str, name: str, handler: Callable[[int], None]) -> None:
     """Parse a numeric argument and invoke *handler*, or print an error."""
     try:
         num = int(arg.strip())
@@ -34,7 +36,7 @@ def _try_num_command(arg, name, handler):
         print(f"Invalid {name} command. Usage: {name} <number>")
 
 
-def _handle_input_fallback(user_input, songs):
+def _handle_input_fallback(user_input: str, songs: list[dict[str, Any]]) -> bool:
     """Handle URL, ad-hoc queue, song number, or fuzzy search.
 
     Returns:
@@ -67,7 +69,7 @@ def _handle_input_fallback(user_input, songs):
         return False
 
 
-def _dispatch_command(user_input, songs):
+def _dispatch_command(user_input: str, songs: list[dict[str, Any]]) -> bool:
     """Route a single user command to its handler.
 
     Returns:
@@ -124,9 +126,9 @@ def _dispatch_command(user_input, songs):
         ("top ", lambda arg: _display_by_play_count(songs, user_input), False),
         ("mode ", lambda arg: _handle_mode_command(arg), False),
     ]
-    for prefix, handler, refresh in prefix_handlers:
+    for prefix, prefix_handler, refresh in prefix_handlers:
         if cmd.startswith(prefix):
-            handler(cmd[len(prefix) :])
+            prefix_handler(cmd[len(prefix) :])
             return refresh
 
     # --- quick-add (case-sensitive "+") ---
@@ -138,7 +140,7 @@ def _dispatch_command(user_input, songs):
     return _handle_input_fallback(user_input, songs)
 
 
-def _print_current_song_status():
+def _print_current_song_status() -> None:
     """Print a one-line current/up-next status above the prompt."""
     current_uid = playback_timeline.get_current_song()
     if not current_uid:
@@ -156,7 +158,7 @@ def _print_current_song_status():
         print(f"\u266a {title}  [{dur_str}]  \u2014 Enter to play")
 
 
-def _handle_resume_current():
+def _handle_resume_current() -> None:
     """Play (or resume) the current song from its saved position."""
     current_uid = playback_timeline.get_current_song()
     if not current_uid:
@@ -170,7 +172,7 @@ def _handle_resume_current():
     _play_song(song, _from_timeline=True, _start_ms=resume_ms)
 
 
-def display_menu():
+def display_menu() -> None:
     """Display interactive menu with two-column song list and unified input handling.
 
     The library is printed once on startup and only again when the user explicitly
@@ -209,7 +211,7 @@ def display_menu():
             _print_library(songs)
 
 
-def _print_library(songs):
+def _print_library(songs: list[dict[str, Any]]) -> None:
     """Print song library in two columns
 
     Args:
@@ -258,15 +260,19 @@ def _print_library(songs):
             print(left_text)
 
     # Command strip
-    print(
-        "[ shuffle : rand <N> : loop <num> : t (timeline) : date : top : del/ren/re <num> ]".center(
-            width
-        )
+    cmd_line1 = (
+        "[ shuffle : rand <N> : loop <num> : t (timeline) : "
+        "date : top : del/ren/re <num> ]"
     )
-    print("[ + <num> <pl> : p (playlists) : l (library) : r (replay) : h (help) : q (quit) ]".center(width))
+    cmd_line2 = (
+        "[ + <num> <pl> : p (playlists) : l (library) : "
+        "r (replay) : h (help) : q (quit) ]"
+    )
+    print(cmd_line1.center(width))
+    print(cmd_line2.center(width))
 
 
-def _truncate_title(title, max_length):
+def _truncate_title(title: str, max_length: int) -> str:
     """Truncate title with ellipsis if too long
 
     Args:
@@ -281,7 +287,7 @@ def _truncate_title(title, max_length):
     return title[: max_length - 3] + "..."
 
 
-def _handle_song_selection(user_input, songs):
+def _handle_song_selection(user_input: str, songs: list[dict[str, Any]]) -> None:
     """Handle song number selection
 
     Args:
@@ -303,7 +309,7 @@ def _handle_song_selection(user_input, songs):
         print("Invalid input. Please enter a song number, URL, or 'q' to quit")
 
 
-def _handle_video_download(url):
+def _handle_video_download(url: str) -> None:
     """Download video, add to library, and play immediately
 
     Args:
@@ -322,7 +328,7 @@ def _handle_video_download(url):
         input("\nPress Enter to continue...")
 
 
-def _handle_playlist_download(url):
+def _handle_playlist_download(url: str) -> None:
     """Confirm and download playlist
 
     Args:
@@ -357,7 +363,13 @@ def _handle_playlist_download(url):
         print("\nPlaylist download cancelled")
 
 
-def _play_song(song, _from_timeline=False, _single_nav=False, _start_ms=0, _in_playlist=False):
+def _play_song(
+    song: dict[str, Any],
+    _from_timeline: bool = False,
+    _single_nav: bool = False,
+    _start_ms: int = 0,
+    _in_playlist: bool = False,
+) -> bool:
     """Play the selected song, following G/H navigation chains.
 
     Args:
@@ -389,6 +401,9 @@ def _play_song(song, _from_timeline=False, _single_nav=False, _start_ms=0, _in_p
 
     # Resolve filename to full path via library directory
     full_path = song_metadata.resolve_path(path)
+    if not full_path:
+        print(f"\nError: Could not resolve file for '{title}'")
+        return False
     navigated = False
 
     # While loop handles chained G/H navigation without recursion depth risk
@@ -437,13 +452,15 @@ def _play_song(song, _from_timeline=False, _single_nav=False, _start_ms=0, _in_p
         # Chain: update for next iteration
         _from_timeline = True  # All subsequent songs come from the timeline
         full_path = song_metadata.resolve_path(pending["path"])
+        if not full_path:
+            break
         uid = pending.get("uid")
         title = pending.get("title", "Unknown")
 
     return navigated
 
 
-def _show_help():
+def _show_help() -> None:
     """Display help information for all commands"""
     help_text = """
 ================================================================================
@@ -522,7 +539,7 @@ OTHER COMMANDS:
   mode h                Next-song mode: History (forward in timeline)
   mode hr               Next-song mode: History (reverse / backwards)
   <Enter>               Resume current song (or play it from beginning)
-  --update-ytdlp          Update yt-dlp and restart (only works when launched via run.bat)
+  --update-ytdlp        Update yt-dlp and restart (only via run.bat)
   h or help             Show this help message
   q or x                Quit program
 
@@ -531,7 +548,7 @@ OTHER COMMANDS:
     print(help_text)
 
 
-def _handle_update_ytdlp():
+def _handle_update_ytdlp() -> None:
     """Exit with code 100 so run.bat updates yt-dlp and restarts the app.
 
     Only meaningful when the application was launched via run.bat; if run
@@ -545,7 +562,7 @@ def _handle_update_ytdlp():
         sys.exit(100)
 
 
-def _handle_stream(url):
+def _handle_stream(url: str) -> None:
     """Stream from URL without downloading
 
     Args:
@@ -555,7 +572,7 @@ def _handle_stream(url):
     play_song.stream_from_url(url)
 
 
-def _handle_mode_command(arg):
+def _handle_mode_command(arg: str) -> None:
     """Handle the 'mode' command: switch the next-song selection mode.
 
     Valid arguments: r/random, a/alpha, h/history, hr/history_r
@@ -587,7 +604,7 @@ def _handle_mode_command(arg):
     print(f"✓ Next-song mode set to: {labels[mode]}")
 
 
-def _handle_replay():
+def _handle_replay() -> None:
     """Replay the last played song"""
     if not _last_played_uid:
         print("\nNo song played yet")
@@ -601,7 +618,7 @@ def _handle_replay():
         print("\nLast played song not found in library")
 
 
-def _handle_delete(num, songs):
+def _handle_delete(num: int, songs: list[dict[str, Any]]) -> None:
     """Delete a song from library and disk
 
     Args:
@@ -615,7 +632,7 @@ def _handle_delete(num, songs):
     song = songs[num - 1]
     title = song.get("title", "Unknown")
     path = song.get("path")
-    uid = song.get("uid")
+    uid = song["uid"]
 
     # Confirm deletion
     confirm = (
@@ -640,7 +657,7 @@ def _handle_delete(num, songs):
         print("Delete cancelled")
 
 
-def _handle_rename(num, songs):
+def _handle_rename(num: int, songs: list[dict[str, Any]]) -> None:
     """Rename a song in the database only
 
     Args:
@@ -653,7 +670,7 @@ def _handle_rename(num, songs):
 
     song = songs[num - 1]
     old_title = song.get("title", "Unknown")
-    uid = song.get("uid")
+    uid = song["uid"]
 
     print(f"\nCurrent title: {old_title}")
     new_title = input("New title: ").strip()
@@ -667,7 +684,7 @@ def _handle_rename(num, songs):
     print(f"✓ Renamed to: {new_title}")
 
 
-def _handle_redownload(num, songs):
+def _handle_redownload(num: int, songs: list[dict[str, Any]]) -> None:
     """Re-download a song to update file and duration
 
     Args:
@@ -679,7 +696,7 @@ def _handle_redownload(num, songs):
         return
 
     song = songs[num - 1]
-    uid = song.get("uid")
+    uid = song["uid"]
 
     # Re-download
     success = youtube_integration.redownload_song(uid)
@@ -758,7 +775,7 @@ def _display_search_results(query: str, results: list, alpha_songs: list) -> Non
     print()
 
 
-def _display_timeline():
+def _display_timeline() -> None:
     """Print the playback timeline window: ±10 entries around the current cursor."""
     timeline = playback_timeline.get_timeline()
     cursor = playback_timeline.get_cursor()
@@ -802,7 +819,7 @@ def _display_timeline():
         print(label)
 
 
-def _display_by_date(songs, reverse=False):
+def _display_by_date(songs: list[dict[str, Any]], reverse: bool = False) -> None:
     """Print all songs sorted by date added.
 
     Args:
@@ -838,7 +855,7 @@ def _display_by_date(songs, reverse=False):
     print()
 
 
-def _display_by_play_count(songs, user_input):
+def _display_by_play_count(songs: list[dict[str, Any]], user_input: str) -> None:
     """Print songs ranked by play count for a chosen time period.
 
     Supported sub-commands after 'top':
@@ -879,7 +896,8 @@ def _display_by_play_count(songs, user_input):
         ranked = listen_history.get_top_songs_last_n_days(days, reverse=reverse)
     else:
         print(
-            f"Unknown top command: '{user_input}'  (try: top / top w / top m / top y / top 30)"
+            f"Unknown top command: '{user_input}'  "
+            "(try: top / top w / top m / top y / top 30)"
         )
         return
 
@@ -914,21 +932,23 @@ def _display_by_play_count(songs, user_input):
 # ============================================================================
 
 
-def _pick_next_alpha_song_uid():
+def _pick_next_alpha_song_uid() -> Optional[str]:
     """Return the UID of the next song alphabetically after the current one."""
     current_uid = playback_timeline.get_current_song()
     songs = song_metadata.get_songs_alphabetically()
     if not songs:
         return None
+    first_uid: Optional[str] = songs[0].get("uid")
     if not current_uid:
-        return songs[0].get("uid")
+        return first_uid
     for i, s in enumerate(songs):
         if s.get("uid") == current_uid:
-            return songs[(i + 1) % len(songs)].get("uid")
-    return songs[0].get("uid")  # Fallback
+            next_uid: Optional[str] = songs[(i + 1) % len(songs)].get("uid")
+            return next_uid
+    return first_uid  # Fallback
 
 
-def _pick_next_current():
+def _pick_next_current() -> Optional[str]:
     """Pick the next current song based on the configured mode.
 
     Appends the chosen song to the timeline and advances the cursor to it.
@@ -955,7 +975,7 @@ def _pick_next_current():
     return uid
 
 
-def _handle_adhoc_queue(tokens, songs):
+def _handle_adhoc_queue(tokens: list[str], songs: list[dict[str, Any]]) -> None:
     """Play songs by index list as an ad-hoc queue (not saved as a playlist).
 
     Args:
@@ -977,7 +997,7 @@ def _handle_adhoc_queue(tokens, songs):
     _play_playlist(queue, shuffle=False)
 
 
-def _handle_shuffle_all(songs):
+def _handle_shuffle_all(songs: list[dict[str, Any]]) -> None:
     """Shuffle and play all songs in the library once."""
     if not songs:
         print("\nNo songs in library")
@@ -987,7 +1007,7 @@ def _handle_shuffle_all(songs):
     _play_playlist(queue, shuffle=True)
 
 
-def _handle_random_offer(user_input, songs):
+def _handle_random_offer(user_input: str, songs: list[dict[str, Any]]) -> None:
     """Display N random songs and let the user pick one to play.
 
     Args:
@@ -1035,7 +1055,7 @@ def _handle_random_offer(user_input, songs):
         print("Invalid input")
 
 
-def _handle_loop(user_input, songs):
+def _handle_loop(user_input: str, songs: list[dict[str, Any]]) -> None:
     """Loop a single song on repeat until Q or X is pressed.
 
     Args:
@@ -1067,6 +1087,9 @@ def _handle_loop(user_input, songs):
 
     # Resolve filename to full path via library directory
     full_path = song_metadata.resolve_path(path)
+    if not full_path:
+        print(f"\nError: Could not resolve file for '{title}'")
+        return
 
     global _last_played_uid
     _last_played_uid = uid
@@ -1090,7 +1113,7 @@ def _handle_loop(user_input, songs):
 # ============================================================================
 
 
-def _playlist_menu():
+def _playlist_menu() -> None:
     """Display playlist management menu"""
     while True:
         all_playlists = playlists.get_all_playlists()
@@ -1159,7 +1182,7 @@ def _playlist_menu():
             print("Invalid input")
 
 
-def _display_playlists(all_playlists):
+def _display_playlists(all_playlists: list[dict[str, Any]]) -> None:
     """Display all playlists with song counts"""
     width = cv.SCREEN_WIDTH
     print("=" * width)
@@ -1183,7 +1206,8 @@ def _display_playlists(all_playlists):
         stats = playlists.get_playlist_stats(pl["uid"])
         count = stats["song_count"] if stats else 0
         empty_tag = " (empty)" if count == 0 else ""
-        left_text = f"{left_idx + 1}  {_truncate_title(pl['name'], col_width - 18)} ({count} songs){empty_tag}"
+        pl_name = _truncate_title(pl["name"], col_width - 18)
+        left_text = f"{left_idx + 1}  {pl_name} ({count} songs){empty_tag}"
 
         # Right column
         if right_idx < len(all_playlists):
@@ -1191,7 +1215,8 @@ def _display_playlists(all_playlists):
             stats_r = playlists.get_playlist_stats(pl_r["uid"])
             count_r = stats_r["song_count"] if stats_r else 0
             empty_tag_r = " (empty)" if count_r == 0 else ""
-            right_text = f"{right_idx + 1}  {_truncate_title(pl_r['name'], col_width - 18)} ({count_r} songs){empty_tag_r}"
+            pl_name_r = _truncate_title(pl_r["name"], col_width - 18)
+            right_text = f"{right_idx + 1}  {pl_name_r} ({count_r} songs){empty_tag_r}"
             print(f"{left_text:<{col_width}}{right_text}")
         else:
             print(left_text)
@@ -1199,7 +1224,7 @@ def _display_playlists(all_playlists):
     print("\n[num] view | c create | del/ren/dup [num] | merge [src] [dest] | q back\n")
 
 
-def _playlist_detail_menu(playlist):
+def _playlist_detail_menu(playlist: dict[str, Any]) -> None:
     """Display and manage a single playlist's contents"""
     playlist_uid = playlist["uid"]
 
@@ -1288,7 +1313,9 @@ def _playlist_detail_menu(playlist):
             print("Invalid input")
 
 
-def _display_playlist_songs(playlist, songs):
+def _display_playlist_songs(
+    playlist: dict[str, Any], songs: list[dict[str, Any]]
+) -> None:
     """Display songs in a playlist"""
     width = cv.SCREEN_WIDTH
     print("=" * width)
@@ -1316,7 +1343,7 @@ def _display_playlist_songs(playlist, songs):
     print("\n[pos] play | play [shuffle] | add/rm [num] | mv [from] [to] | clear | q\n")
 
 
-def _play_playlist(songs, shuffle=False):
+def _play_playlist(songs: list[dict[str, Any]], shuffle: bool = False) -> None:
     """Play all songs in a playlist sequentially"""
     global _last_played_uid
 
@@ -1356,7 +1383,9 @@ def _play_playlist(songs, shuffle=False):
         # _play_song returns True if the user navigated away via G/H.
         # _single_nav ensures it returns after one press without playing
         # the pending song, so the loop can print the counter first.
-        navigated = _play_song(song, _from_timeline=True, _single_nav=True, _in_playlist=True)
+        navigated = _play_song(
+            song, _from_timeline=True, _single_nav=True, _in_playlist=True
+        )
 
         if navigated:
             # G/H was used — figure out where the cursor landed and resume
@@ -1397,7 +1426,7 @@ def _play_playlist(songs, shuffle=False):
         _pick_next_current()
 
 
-def _handle_quick_add(args, songs):
+def _handle_quick_add(args: str, songs: list[dict[str, Any]]) -> None:
     """Quick-add a song to a playlist from main menu"""
     parts = args.split(maxsplit=1)
     if len(parts) != 2:
@@ -1442,7 +1471,7 @@ def _handle_quick_add(args, songs):
     print(f"✓ Added '{song['title']}' to '{playlist_name}'")
 
 
-def _handle_create_playlist():
+def _handle_create_playlist() -> None:
     """Create a new playlist"""
     name = input("\nPlaylist name: ").strip()
     if not name:
@@ -1457,7 +1486,7 @@ def _handle_create_playlist():
         input("\nPress Enter to continue...")
 
 
-def _handle_delete_playlist(num, all_playlists):
+def _handle_delete_playlist(num: int, all_playlists: list[dict[str, Any]]) -> None:
     """Delete a playlist"""
     if num < 1 or num > len(all_playlists):
         print(f"Invalid playlist number: {num}")
@@ -1473,7 +1502,7 @@ def _handle_delete_playlist(num, all_playlists):
         print("Cancelled")
 
 
-def _handle_rename_playlist(num, all_playlists):
+def _handle_rename_playlist(num: int, all_playlists: list[dict[str, Any]]) -> None:
     """Rename a playlist"""
     if num < 1 or num > len(all_playlists):
         print(f"Invalid playlist number: {num}")
@@ -1495,7 +1524,7 @@ def _handle_rename_playlist(num, all_playlists):
         input("\nPress Enter to continue...")
 
 
-def _handle_duplicate_playlist(num, all_playlists):
+def _handle_duplicate_playlist(num: int, all_playlists: list[dict[str, Any]]) -> None:
     """Duplicate a playlist"""
     if num < 1 or num > len(all_playlists):
         print(f"Invalid playlist number: {num}")
@@ -1516,7 +1545,9 @@ def _handle_duplicate_playlist(num, all_playlists):
         input("\nPress Enter to continue...")
 
 
-def _handle_merge_playlists(src_num, dest_num, all_playlists):
+def _handle_merge_playlists(
+    src_num: int, dest_num: int, all_playlists: list[dict[str, Any]]
+) -> None:
     """Merge source playlist into destination"""
     if src_num < 1 or src_num > len(all_playlists):
         print(f"Invalid source playlist number: {src_num}")
@@ -1541,7 +1572,7 @@ def _handle_merge_playlists(src_num, dest_num, all_playlists):
         print("Cancelled")
 
 
-def _handle_add_song_to_playlist(playlist_uid, song_num):
+def _handle_add_song_to_playlist(playlist_uid: str, song_num: int) -> None:
     """Add a song from library to playlist"""
     songs = song_metadata.get_songs_alphabetically()
 
@@ -1554,7 +1585,9 @@ def _handle_add_song_to_playlist(playlist_uid, song_num):
     print(f"✓ Added: {song['title']}")
 
 
-def _handle_remove_from_playlist(playlist_uid, position, songs):
+def _handle_remove_from_playlist(
+    playlist_uid: str, position: int, songs: list[dict[str, Any]]
+) -> None:
     """Remove song at position from playlist"""
     if position < 1 or position > len(songs):
         print(f"Invalid position: {position}")
@@ -1565,7 +1598,9 @@ def _handle_remove_from_playlist(playlist_uid, position, songs):
     print(f"✓ Removed: {song_item.get('title', 'Unknown')}")
 
 
-def _handle_move_song(playlist_uid, from_pos, to_pos, songs):
+def _handle_move_song(
+    playlist_uid: str, from_pos: int, to_pos: int, songs: list[dict[str, Any]]
+) -> None:
     """Move song from one position to another"""
     if from_pos < 1 or from_pos > len(songs):
         print(f"Invalid from position: {from_pos}")
@@ -1581,7 +1616,7 @@ def _handle_move_song(playlist_uid, from_pos, to_pos, songs):
         input("\nPress Enter to continue...")
 
 
-def _handle_clear_playlist(playlist_uid, name):
+def _handle_clear_playlist(playlist_uid: str, name: str) -> None:
     """Clear all songs from playlist"""
     confirm = input(f"\nRemove all songs from '{name}'? (y/n): ").strip().lower()
 

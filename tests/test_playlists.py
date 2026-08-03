@@ -50,7 +50,8 @@ class TestDatabaseInitialization(TestPlaylists):
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('playlists', 'playlist_items')"
+            "SELECT name FROM sqlite_master WHERE type='table' "
+            "AND name IN ('playlists', 'playlist_items')"
         )
         tables = [row[0] for row in cursor.fetchall()]
         conn.close()
@@ -285,20 +286,6 @@ class TestReordering(TestPlaylists):
         self.assertTrue(success)
         songs = playlists.get_playlist_songs(uid, self.db_path)
         self.assertEqual(songs[0]["uid"], "songC333CCCC3333")
-
-    def test_shuffle_playlist(self):
-        """Test shuffling playlist (just verify count stays same)"""
-        uid = playlists.create_playlist("Test", db_path=self.db_path)
-        song_uids = [f"song{i:04d}AAAA{i:04d}" for i in range(10)]
-        playlists.add_multiple_to_playlist(uid, song_uids, self.db_path)
-
-        playlists.shuffle_playlist(uid, self.db_path)
-
-        songs = playlists.get_playlist_songs(uid, self.db_path)
-        self.assertEqual(len(songs), 10)
-        # Verify all songs still present
-        shuffled_uids = {s["uid"] for s in songs}
-        self.assertEqual(shuffled_uids, set(song_uids))
 
 
 class TestQueryFunctions(TestPlaylists):

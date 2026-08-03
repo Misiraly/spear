@@ -52,7 +52,7 @@ def download_and_add_video(url: str) -> Optional[str]:
         existing_song = song_metadata.get_song_by_url(url)
         if not existing_song:
             return None
-        uid = existing_song["uid"]
+        uid: str = existing_song["uid"]
 
         # Download
         download_info = youtube_downloader.download_video(url)
@@ -136,7 +136,7 @@ def download_and_add_playlist(url: str) -> Optional[str]:
             counter += 1
 
         # Create playlist
-        playlist_uid = playlists.create_playlist(
+        playlist_uid: str = playlists.create_playlist(
             name=playlist_name, description=f"Downloaded from YouTube: {url}"
         )
 
@@ -275,8 +275,8 @@ def redownload_song(uid: str) -> bool:
     )
 
     print("\n✓ Re-download complete")
-    print(
-        f"Duration updated: {existing_song.get('duration', 0)}s → {download_info['duration']}s"
-    )
+    old_duration = existing_song.get("duration", 0)
+    new_duration = download_info["duration"]
+    print(f"Duration updated: {old_duration}s → {new_duration}s")
 
     return True

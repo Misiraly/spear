@@ -49,13 +49,15 @@ def temp_db():
     cursor.execute(
         """
         INSERT INTO songs (uid, title, url, duration, add_date, path)
-        VALUES ('abc123', 'Test Song 1', 'http://example.com/1', 180, '2025-01-01', '/path/1')
+        VALUES ('abc123', 'Test Song 1', 'http://example.com/1', 180,
+                '2025-01-01', '/path/1')
     """
     )
     cursor.execute(
         """
         INSERT INTO songs (uid, title, url, duration, add_date, path)
-        VALUES ('def456', 'Test Song 2', 'http://example.com/2', 240, '2025-01-02', '/path/2')
+        VALUES ('def456', 'Test Song 2', 'http://example.com/2', 240,
+                '2025-01-02', '/path/2')
     """
     )
 
@@ -227,7 +229,8 @@ def test_csv_encoding_with_unicode(temp_db, temp_output_dir, monkeypatch):
     cursor.execute(
         """
         INSERT INTO songs (uid, title, url, duration, add_date, path)
-        VALUES ('xyz789', 'Café ☕ 日本語', 'http://example.com/3', 200, '2025-01-03', '/path/3')
+        VALUES ('xyz789', 'Café ☕ 日本語', 'http://example.com/3', 200,
+                '2025-01-03', '/path/3')
     """
     )
     conn.commit()

@@ -7,7 +7,9 @@ stored in SQLite alongside the listen history.
 
 import os
 import random
+import sqlite3
 from datetime import datetime
+from typing import Any, Optional
 
 import constants as cv
 from db_utils import ensure_playlist_exists as _ensure_playlist_exists
@@ -22,7 +24,7 @@ from db_utils import validate_uid as _validate_uid
 DB_PATH = cv.DB_PATH
 
 
-def init_database(db_path=DB_PATH):
+def init_database(db_path: str = DB_PATH) -> str:
     """Create playlist tables if they don't exist"""
     os.makedirs(os.path.dirname(db_path), exist_ok=True)
 
@@ -79,8 +81,11 @@ def init_database(db_path=DB_PATH):
 
 
 def _renumber_positions(
-    playlist_uid, conn=None, max_position_before_delete=None, db_path=DB_PATH
-):
+    playlist_uid: str,
+    conn: Optional[sqlite3.Connection] = None,
+    max_position_before_delete: Optional[int] = None,
+    db_path: str = DB_PATH,
+) -> None:
     """Renumber playlist positions to be consecutive starting from 1"""
     should_close = conn is None
     if conn is None:
@@ -101,8 +106,8 @@ def _renumber_positions(
 
         items = cursor.fetchall()
 
-        # Optimization: if max_position_before_delete is provided and equals item count + 1,
-        # the deleted item was at the end, so no renumbering needed
+        # Optimization: if max_position_before_delete is provided and equals
+        # item count + 1, the deleted item was at the end, so skip renumbering
         if (
             max_position_before_delete is not None
             and max_position_before_delete == len(items) + 1
@@ -127,7 +132,11 @@ def _renumber_positions(
             conn.__exit__(None, None, None)
 
 
-def _update_modified_time(playlist_uid, conn=None, db_path=DB_PATH):
+def _update_modified_time(
+    playlist_uid: str,
+    conn: Optional[sqlite3.Connection] = None,
+    db_path: str = DB_PATH,
+) -> None:
     """Update last_modified timestamp for a playlist"""
     should_close = conn is None
     if conn is None:
@@ -155,7 +164,12 @@ def _update_modified_time(playlist_uid, conn=None, db_path=DB_PATH):
 # ============================================================================
 
 
-def create_playlist(name, description=None, song_uids=None, db_path=DB_PATH):
+def create_playlist(
+    name: str,
+    description: Optional[str] = None,
+    song_uids: Optional[list[str]] = None,
+    db_path: str = DB_PATH,
+) -> str:
     """Create a new playlist
 
     Args:
@@ -194,7 +208,7 @@ def create_playlist(name, description=None, song_uids=None, db_path=DB_PATH):
     return uid
 
 
-def rename_playlist(playlist_uid, new_name, db_path=DB_PATH):
+def rename_playlist(playlist_uid: str, new_name: str, db_path: str = DB_PATH) -> bool:
     """Rename an existing playlist"""
     _validate_uid(playlist_uid, "playlist_uid")
 
@@ -221,7 +235,9 @@ def rename_playlist(playlist_uid, new_name, db_path=DB_PATH):
         return True
 
 
-def update_playlist_description(playlist_uid, description, db_path=DB_PATH):
+def update_playlist_description(
+    playlist_uid: str, description: Optional[str], db_path: str = DB_PATH
+) -> bool:
     """Update playlist description"""
     _validate_uid(playlist_uid, "playlist_uid")
 
@@ -243,7 +259,7 @@ def update_playlist_description(playlist_uid, description, db_path=DB_PATH):
         return True
 
 
-def delete_playlist(playlist_uid, db_path=DB_PATH):
+def delete_playlist(playlist_uid: str, db_path: str = DB_PATH) -> None:
     """Delete a playlist and all its items"""
     _validate_uid(playlist_uid, "playlist_uid")
 
@@ -265,7 +281,7 @@ def delete_playlist(playlist_uid, db_path=DB_PATH):
         conn.commit()
 
 
-def get_playlist(playlist_uid, db_path=DB_PATH):
+def get_playlist(playlist_uid: str, db_path: str = DB_PATH) -> Optional[dict[str, Any]]:
     """Get playlist metadata, returns dict or None"""
     _validate_uid(playlist_uid, "playlist_uid")
 
@@ -285,7 +301,7 @@ def get_playlist(playlist_uid, db_path=DB_PATH):
         return None
 
 
-def get_all_playlists(db_path=DB_PATH):
+def get_all_playlists(db_path: str = DB_PATH) -> list[dict[str, Any]]:
     """Get all playlists ordered by name"""
     with _get_connection(db_path) as conn:
         cursor = conn.cursor()
@@ -300,15 +316,15 @@ def get_all_playlists(db_path=DB_PATH):
         return [_row_to_playlist_dict(row) for row in cursor.fetchall()]
 
 
-def get_playlist_count(db_path=DB_PATH):
+def get_playlist_count(db_path: str = DB_PATH) -> int:
     """Return total number of playlists"""
     with _get_connection(db_path) as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT COUNT(*) FROM playlists")
-        return cursor.fetchone()[0]
+        return int(cursor.fetchone()[0])
 
 
-def playlist_exists(name, db_path=DB_PATH):
+def playlist_exists(name: str, db_path: str = DB_PATH) -> bool:
     """Check if playlist name already exists"""
     with _get_connection(db_path) as conn:
         cursor = conn.cursor()
@@ -318,10 +334,10 @@ def playlist_exists(name, db_path=DB_PATH):
         """,
             (name,),
         )
-        return cursor.fetchone()[0] > 0
+        return int(cursor.fetchone()[0]) > 0
 
 
-def get_playlist_by_name(name, db_path=DB_PATH):
+def get_playlist_by_name(name: str, db_path: str = DB_PATH) -> Optional[dict[str, Any]]:
     """Retrieve playlist by name, returns dict or None"""
     with _get_connection(db_path) as conn:
         cursor = conn.cursor()
@@ -344,7 +360,7 @@ def get_playlist_by_name(name, db_path=DB_PATH):
 # ============================================================================
 
 
-def add_to_playlist(playlist_uid, song_uid, db_path=DB_PATH):
+def add_to_playlist(playlist_uid: str, song_uid: str, db_path: str = DB_PATH) -> None:
     """Add a single song to the end of a playlist"""
     _validate_uid(playlist_uid, "playlist_uid")
     _validate_uid(song_uid, "song_uid")
@@ -371,7 +387,9 @@ def add_to_playlist(playlist_uid, song_uid, db_path=DB_PATH):
         conn.commit()
 
 
-def add_multiple_to_playlist(playlist_uid, song_uids, db_path=DB_PATH):
+def add_multiple_to_playlist(
+    playlist_uid: str, song_uids: list[str], db_path: str = DB_PATH
+) -> None:
     """Bulk add songs to a playlist"""
     _validate_uid(playlist_uid, "playlist_uid")
     for song_uid in song_uids:
@@ -404,7 +422,9 @@ def add_multiple_to_playlist(playlist_uid, song_uids, db_path=DB_PATH):
         conn.commit()
 
 
-def insert_at_position(playlist_uid, song_uid, position, db_path=DB_PATH):
+def insert_at_position(
+    playlist_uid: str, song_uid: str, position: int, db_path: str = DB_PATH
+) -> None:
     """Insert a song at a specific position (1-based)"""
     _validate_uid(playlist_uid, "playlist_uid")
     _validate_uid(song_uid, "song_uid")
@@ -461,7 +481,9 @@ def insert_at_position(playlist_uid, song_uid, position, db_path=DB_PATH):
 # ============================================================================
 
 
-def remove_by_position(playlist_uid, position, db_path=DB_PATH):
+def remove_by_position(
+    playlist_uid: str, position: int, db_path: str = DB_PATH
+) -> bool:
     """Remove song at a specific position"""
     _validate_uid(playlist_uid, "playlist_uid")
 
@@ -500,7 +522,7 @@ def remove_by_position(playlist_uid, position, db_path=DB_PATH):
         return True
 
 
-def remove_by_uid(playlist_uid, song_uid, db_path=DB_PATH):
+def remove_by_uid(playlist_uid: str, song_uid: str, db_path: str = DB_PATH) -> None:
     """Remove all instances of a song from a playlist"""
     _validate_uid(playlist_uid, "playlist_uid")
     _validate_uid(song_uid, "song_uid")
@@ -521,7 +543,7 @@ def remove_by_uid(playlist_uid, song_uid, db_path=DB_PATH):
         conn.commit()
 
 
-def remove_from_all_playlists(song_uid, db_path=DB_PATH):
+def remove_from_all_playlists(song_uid: str, db_path: str = DB_PATH) -> None:
     """Remove a song from every playlist"""
     _validate_uid(song_uid, "song_uid")
 
@@ -545,7 +567,7 @@ def remove_from_all_playlists(song_uid, db_path=DB_PATH):
             (song_uid,),
         )
 
-        # Renumber and update timestamps for all affected playlists in single transaction
+        # Renumber and update timestamps for all affected playlists at once
         for playlist_uid in affected_playlists:
             _renumber_positions(playlist_uid, conn, None, db_path)
             _update_modified_time(playlist_uid, conn, db_path)
@@ -553,7 +575,7 @@ def remove_from_all_playlists(song_uid, db_path=DB_PATH):
         conn.commit()
 
 
-def clear_playlist(playlist_uid, db_path=DB_PATH):
+def clear_playlist(playlist_uid: str, db_path: str = DB_PATH) -> None:
     """Remove all songs from playlist but keep the playlist"""
     _validate_uid(playlist_uid, "playlist_uid")
 
@@ -574,7 +596,9 @@ def clear_playlist(playlist_uid, db_path=DB_PATH):
 # ============================================================================
 
 
-def move_song(playlist_uid, from_position, to_position, db_path=DB_PATH):
+def move_song(
+    playlist_uid: str, from_position: int, to_position: int, db_path: str = DB_PATH
+) -> bool:
     """Move a song from one position to another"""
     _validate_uid(playlist_uid, "playlist_uid")
 
@@ -660,7 +684,7 @@ def move_song(playlist_uid, from_position, to_position, db_path=DB_PATH):
         return True
 
 
-def shuffle_playlist(playlist_uid, db_path=DB_PATH):
+def shuffle_playlist(playlist_uid: str, db_path: str = DB_PATH) -> bool:
     """Randomly shuffle all songs in a playlist"""
     _validate_uid(playlist_uid, "playlist_uid")
 
@@ -708,7 +732,9 @@ def shuffle_playlist(playlist_uid, db_path=DB_PATH):
 # ============================================================================
 
 
-def get_playlist_songs(playlist_uid, db_path=DB_PATH):
+def get_playlist_songs(
+    playlist_uid: str, db_path: str = DB_PATH
+) -> list[dict[str, Any]]:
     """Get all songs in a playlist with their titles"""
     _validate_uid(playlist_uid, "playlist_uid")
 
@@ -733,7 +759,9 @@ def get_playlist_songs(playlist_uid, db_path=DB_PATH):
         return [_row_to_playlist_item_dict(row) for row in cursor.fetchall()]
 
 
-def find_playlists_for_song(song_uid, db_path=DB_PATH):
+def find_playlists_for_song(
+    song_uid: str, db_path: str = DB_PATH
+) -> list[dict[str, Any]]:
     """Find all playlists containing a specific song"""
     _validate_uid(song_uid, "song_uid")
 
@@ -754,7 +782,7 @@ def find_playlists_for_song(song_uid, db_path=DB_PATH):
         )
 
         # Group by playlist
-        playlists_dict = {}
+        playlists_dict: dict[Any, dict[str, Any]] = {}
         for row in cursor.fetchall():
             playlist_uid = row[0]
             playlist_name = row[1]
@@ -772,7 +800,7 @@ def find_playlists_for_song(song_uid, db_path=DB_PATH):
         return list(playlists_dict.values())
 
 
-def get_empty_playlists(db_path=DB_PATH):
+def get_empty_playlists(db_path: str = DB_PATH) -> list[dict[str, Any]]:
     """List playlists with no songs
 
     Returns:
@@ -793,7 +821,7 @@ def get_empty_playlists(db_path=DB_PATH):
         return [_row_to_playlist_dict(row) for row in cursor.fetchall()]
 
 
-def search_playlists(query, db_path=DB_PATH):
+def search_playlists(query: str, db_path: str = DB_PATH) -> list[dict[str, Any]]:
     """Search playlists by name
 
     Args:
@@ -823,7 +851,9 @@ def search_playlists(query, db_path=DB_PATH):
 # ============================================================================
 
 
-def get_playlist_stats(playlist_uid, db_path=DB_PATH):
+def get_playlist_stats(
+    playlist_uid: str, db_path: str = DB_PATH
+) -> Optional[dict[str, Any]]:
     """Get comprehensive statistics for a playlist
 
     Args:
@@ -877,7 +907,7 @@ def get_playlist_stats(playlist_uid, db_path=DB_PATH):
     }
 
 
-def merge_playlists(source_uid, target_uid, db_path=DB_PATH):
+def merge_playlists(source_uid: str, target_uid: str, db_path: str = DB_PATH) -> None:
     """Append all songs from source playlist to target playlist
 
     Args:
@@ -902,7 +932,9 @@ def merge_playlists(source_uid, target_uid, db_path=DB_PATH):
     add_multiple_to_playlist(target_uid, song_uids, db_path)
 
 
-def duplicate_playlist(playlist_uid, new_name, db_path=DB_PATH):
+def duplicate_playlist(
+    playlist_uid: str, new_name: str, db_path: str = DB_PATH
+) -> Optional[str]:
     """Create a copy of a playlist with a new name
 
     Args:

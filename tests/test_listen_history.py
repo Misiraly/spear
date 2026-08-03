@@ -1,3 +1,4 @@
+import gc
 import os
 import sqlite3
 import tempfile
@@ -71,7 +72,8 @@ class TestDatabaseInitialization(TestListenHistory):
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='listen_history'"
+            "SELECT name FROM sqlite_master "
+            "WHERE type='table' AND name='listen_history'"
         )
         result = cursor.fetchone()
         conn.close()
@@ -622,9 +624,9 @@ class TestConnectionContextManager(unittest.TestCase):
             # On some Python/SQLite versions cursor ops after close still work,
             # so we just verify the context manager completes without error.
         finally:
-            # Clear references to allow Windows to release the file lock
-            del cursor, conn
-            import gc
+            # Drop references so the unfetched statement is finalized before
+            # unlink (Windows keeps the file locked until the cursor is freed).
+            cursor = conn = None
             gc.collect()
             if os.path.exists(db_path):
                 os.unlink(db_path)

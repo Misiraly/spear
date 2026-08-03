@@ -19,7 +19,7 @@ else:
     import tty
 from typing import Optional
 
-import vlc  # type: ignore[import-untyped]
+import vlc
 
 import constants as cv
 import listen_history
@@ -53,19 +53,20 @@ def format_time(seconds: float) -> str:
 class MusicPlayer:
     """VLC-based music player with keyboard controls"""
 
-    def __init__(self):
-        self.instance = vlc.Instance()
+    def __init__(self) -> None:
+        # --quiet: libvlc otherwise spams stderr (e.g. "stale plugins cache")
+        self.instance = vlc.Instance("--quiet")
         self.player = self.instance.media_player_new()
         self.is_playing = False
         self.is_stopped = False
         self.should_exit = False
-        self.pending_song_uid = None  # Set by G/H navigation for caller to pick up
-        self.exit_reason = "ended"  # "ended", "skip" (Q), "abort" (X), "navigate" (G/H)
+        self.pending_song_uid: Optional[str] = None  # Set by G/H for caller pickup
+        self.exit_reason = "ended"  # "ended", "skip" (Q), "abort" (X), "navigate"
         self.loop_mode = False  # When True, restart song on natural end
         self.loop_count = 0  # Number of completed loop iterations
-        self.current_song_uid = None
-        self.start_time = None
-        self.total_played_time = 0  # Track cumulative playback time
+        self.current_song_uid: Optional[str] = None
+        self.start_time: Optional[float] = None
+        self.total_played_time: float = 0  # Track cumulative playback time
         self.last_duration = 0  # Store duration for display when stopped
         self.listen_log_count = 0  # Track how many times we've logged this song
         self.last_position_ms = 0  # Position (ms) captured when playback exits
@@ -77,7 +78,7 @@ class MusicPlayer:
         title: Optional[str] = None,
         loop_mode: bool = False,
         start_ms: int = 0,
-    ):
+    ) -> None:
         """Play a song from local file or URL
 
         Args:
@@ -85,7 +86,7 @@ class MusicPlayer:
             song_uid: Optional song UID for listen history logging
             title: Optional song title for display
             loop_mode: When True, restart song automatically on natural end
-            start_ms: Start playback from this position in milliseconds (0 = from beginning)
+            start_ms: Start playback from this position in ms (0 = from start)
         """
         self.current_song_uid = song_uid
         self.should_exit = False
@@ -124,7 +125,7 @@ class MusicPlayer:
         # Display UI and handle controls
         self._display_and_control(title)
 
-    def _display_and_control(self, title: str):
+    def _display_and_control(self, title: str) -> None:
         """Display playback UI and handle keyboard controls
 
         Args:
@@ -133,7 +134,7 @@ class MusicPlayer:
         # Display UI before starting raw mode keyboard listener
         self._display_header(title)
 
-        # Start keyboard listener thread (sets tty.setraw — must be after header display)
+        # Start keyboard listener thread (raw mode; must follow header display)
         keyboard_thread = threading.Thread(target=self._keyboard_listener, daemon=True)
         keyboard_thread.start()
 
@@ -151,9 +152,8 @@ class MusicPlayer:
                     self.player.play()
                     self.is_playing = True
                     self.start_time = time.time()
-                    sys.stdout.write(
-                        f"\r\n{'[Loop ' + str(self.loop_count + 1) + ']':^{cv.SCREEN_WIDTH}}\r\n"
-                    )
+                    loop_label = f"[Loop {self.loop_count + 1}]"
+                    sys.stdout.write(f"\r\n{loop_label:^{cv.SCREEN_WIDTH}}\r\n")
                     sys.stdout.flush()
                     continue
                 break
@@ -180,7 +180,7 @@ class MusicPlayer:
         sys.stdout.write("\r\n")  # Move to new line after progress bar
         sys.stdout.flush()
 
-    def _display_header(self, title: str):
+    def _display_header(self, title: str) -> None:
         """Display centered song title and controls
 
         Args:
@@ -205,7 +205,7 @@ class MusicPlayer:
 
         print()
 
-    def _wrap_text(self, text: str, width: int) -> list:
+    def _wrap_text(self, text: str, width: int) -> list[str]:
         """Wrap text to multiple lines if needed
 
         Args:
@@ -236,7 +236,7 @@ class MusicPlayer:
 
         return lines
 
-    def _check_and_log_listen(self):
+    def _check_and_log_listen(self) -> None:
         """Check if we've crossed a 70% threshold and log if so"""
         if not self.current_song_uid:
             return
@@ -261,7 +261,7 @@ class MusicPlayer:
             listen_history.log_listen(self.current_song_uid)
             self.listen_log_count += 1
 
-    def _update_progress(self):
+    def _update_progress(self) -> None:
         """Update progress bar with format: (icon) time====v---- time"""
         # Get duration (use stored if stopped, otherwise from player)
         if self.is_stopped:
@@ -305,8 +305,7 @@ class MusicPlayer:
         sys.stdout.write(f"\r{icon}{pos_str}{bar}{dur_str}\033[K")
         sys.stdout.flush()
 
-
-    def _keyboard_listener(self):
+    def _keyboard_listener(self) -> None:
         """Listen for keyboard input in separate thread"""
         key_actions = {
             b" ": self._toggle_play_pause,  # Space - play/pause
@@ -362,7 +361,7 @@ class MusicPlayer:
             finally:
                 termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
 
-    def _toggle_play_pause(self):
+    def _toggle_play_pause(self) -> None:
         """Toggle between play and pause"""
         # Don't allow resume if stopped
         if self.is_stopped:
@@ -380,7 +379,7 @@ class MusicPlayer:
             self.is_playing = True
             self.start_time = time.time()
 
-    def _stop(self):
+    def _stop(self) -> None:
         """Stop playback and reset to beginning"""
         self.player.stop()
         self.is_playing = False
@@ -391,7 +390,7 @@ class MusicPlayer:
         # Force immediate display update to show stop icon and cursor at start
         self._update_progress()
 
-    def _restart(self):
+    def _restart(self) -> None:
         """Restart current song from beginning"""
         self.player.set_time(0)
         if not self.is_playing:
@@ -400,7 +399,7 @@ class MusicPlayer:
             self.is_stopped = False
             self.start_time = time.time()
 
-    def _previous_song(self):
+    def _previous_song(self) -> None:
         """Skip to previous song in playback timeline"""
         prev_song = playback_timeline.skip_back()
         if prev_song:
@@ -408,7 +407,7 @@ class MusicPlayer:
             self.exit_reason = "navigate"
             self.should_exit = True
 
-    def _next_song(self):
+    def _next_song(self) -> None:
         """Skip to next song in playback timeline"""
         next_song = playback_timeline.skip_forward(shuffle=False)
         if next_song:
@@ -416,7 +415,7 @@ class MusicPlayer:
             self.exit_reason = "navigate"
             self.should_exit = True
 
-    def _seek(self, milliseconds: int):
+    def _seek(self, milliseconds: int) -> None:
         """Seek forward or backward
 
         Args:
@@ -429,7 +428,7 @@ class MusicPlayer:
             new_time = min(new_time, duration - 1000)  # 1 second buffer before end
         self.player.set_time(new_time)
 
-    def _jump_to_percent(self, percent: int):
+    def _jump_to_percent(self, percent: int) -> None:
         """Jump to specific percentage of song
 
         Args:
@@ -438,7 +437,7 @@ class MusicPlayer:
         clamped = min(percent / 100.0, 0.95)
         self.player.set_position(clamped)
 
-    def _on_song_end(self):
+    def _on_song_end(self) -> None:
         """Handle song ending naturally"""
         # Track final play time
         if self.start_time:
@@ -461,7 +460,7 @@ def play_song(
     title: Optional[str] = None,
     loop_mode: bool = False,
     start_ms: int = 0,
-):
+) -> None:
     """Play a song from local file
 
     Args:
@@ -469,7 +468,7 @@ def play_song(
         song_uid: Optional song UID for listen history
         title: Optional song title for display
         loop_mode: When True, restart song automatically on natural end
-        start_ms: Start playback from this position in milliseconds (0 = from beginning)
+        start_ms: Start playback from this position in ms (0 = from start)
     """
     _player.play(path, song_uid, title, loop_mode, start_ms=start_ms)
 
@@ -507,7 +506,7 @@ def get_last_position_ms() -> int:
     return _player.last_position_ms
 
 
-def stream_from_url(url: str):
+def stream_from_url(url: str) -> None:
     """Stream and play from URL without database interaction
 
     Uses yt-dlp to extract direct stream URL to avoid VLC YouTube parsing issues.
